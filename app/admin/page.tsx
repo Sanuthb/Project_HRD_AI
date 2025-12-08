@@ -1,0 +1,54 @@
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { FileText, PlusCircle, ArrowRight } from "lucide-react";
+
+export default function AdminPage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <p className="text-muted-foreground">
+          Manage interviews and view candidate results
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Create Interview</CardTitle>
+            <CardDescription>
+              Set up a new placement interview
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/create-interview">
+              <Button className="w-full">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Create New Interview
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>View Interviews</CardTitle>
+            <CardDescription>
+              Browse all created interviews
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/interviews">
+              <Button className="w-full" variant="outline">
+                <FileText className="mr-2 h-4 w-4" />
+                View All Interviews
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
