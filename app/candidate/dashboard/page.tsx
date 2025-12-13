@@ -1,24 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Clock, FileText, CheckCircle2, XCircle, Loader2, User } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import { Clock, FileText, CheckCircle2, XCircle, LogOut } from "lucide-react";
 import { Candidate, Interview } from "@/lib/types";
-import { getCandidateByUSN } from "@/lib/services/candidates";
+import { getCandidateById } from "@/lib/services/candidates";
 import { getInterviewById } from "@/lib/services/interviews";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { ProtectedRoute } from "@/components/protected-route";
 import { toast } from "sonner";
 
-export default function CandidateDashboardPage() {
-  const [usn, setUsn] = useState("");
+function CandidateDashboardContent() {
+  const router = useRouter();
+  const { user, candidateId, signOut } = useAuth();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [interview, setInterview] = useState<Interview | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
@@ -27,14 +28,52 @@ export default function CandidateDashboardPage() {
     seconds: 0,
   });
 
-  // Check if candidate is already identified (from localStorage)
+  // Fetch candidate and interview data
   useEffect(() => {
-    const savedUsn = localStorage.getItem("candidate_usn");
-    if (savedUsn) {
-      setUsn(savedUsn);
-      handleLookupCandidate(savedUsn);
-    }
-  }, []);
+    const fetchData = async () => {
+      if (!candidateId) {
+        setIsLoading(false);
+        setError("No candidate profile linked to your account. Please contact administrator.");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Fetch candidate data
+        const candidateData = await getCandidateById(candidateId);
+
+        if (!candidateData) {
+          setError("Candidate profile not found. Please contact administrator.");
+          setIsLoading(false);
+          return;
+        }
+
+        setCandidate(candidateData);
+
+        // Fetch interview data
+        if (candidateData.interview_id) {
+          const interviewData = await getInterviewById(candidateData.interview_id);
+
+          if (!interviewData) {
+            setError("Interview not found for this candidate.");
+          } else {
+            setInterview(interviewData);
+          }
+        } else {
+          setError("No interview assigned to this candidate.");
+        }
+      } catch (err: any) {
+        console.error("Error fetching data:", err);
+        setError(err.message || "Failed to load dashboard data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [candidateId]);
 
   // Update countdown timer
   useEffect(() => {
@@ -67,59 +106,9 @@ export default function CandidateDashboardPage() {
     return () => clearInterval(timer);
   }, [interview]);
 
-  const handleLookupCandidate = async (usnValue?: string) => {
-    const usnToLookup = usnValue || usn.trim();
-    
-    if (!usnToLookup) {
-      setError("Please enter your USN");
-      return;
-    }
-
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      // Fetch candidate data
-      const candidateData = await getCandidateByUSN(usnToLookup.trim());
-
-      if (!candidateData) {
-        setError("Candidate not found. Please check your USN or contact the administrator.");
-        setCandidate(null);
-        setInterview(null);
-        return;
-      }
-
-      setCandidate(candidateData);
-      localStorage.setItem("candidate_usn", usnToLookup.trim());
-
-      // Fetch interview data
-      if (candidateData.interview_id) {
-        const interviewData = await getInterviewById(candidateData.interview_id);
-
-        if (!interviewData) {
-          setError("Interview not found for this candidate.");
-          setInterview(null);
-        } else {
-          setInterview(interviewData);
-          toast.success(`Welcome, ${candidateData.name}!`);
-        }
-      } else {
-        setError("No interview assigned to this candidate.");
-        setInterview(null);
-      }
-    } catch (err: any) {
-      console.error("Error looking up candidate:", err);
-      setError(err.message || "Failed to lookup candidate");
-      setCandidate(null);
-      setInterview(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleLookupCandidate();
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
   };
 
   const interviewStatus = candidate?.status === "Promoted" 
@@ -130,62 +119,12 @@ export default function CandidateDashboardPage() {
     ? "Scheduled"
     : "Pending";
 
-  // Show lookup form if candidate not found
-  if (!candidate) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Candidate Dashboard</h1>
-          <p className="text-muted-foreground">
-            Enter your USN to view your interview information
-          </p>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading your dashboard...</p>
         </div>
-
-        {error && (
-          <Alert className="border-red-500 bg-red-50 dark:bg-red-950">
-            <XCircle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="text-red-800 dark:text-red-200">
-              Error
-            </AlertTitle>
-            <AlertDescription className="text-red-700 dark:text-red-300">
-              {error}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Enter Your USN</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="usn">University Seat Number (USN) *</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="usn"
-                    placeholder="e.g., 1NH20CS001"
-                    value={usn}
-                    onChange={(e) => setUsn(e.target.value)}
-                    disabled={isLoading}
-                    className="flex-1"
-                    required
-                  />
-                  <Button
-                    type="submit"
-                    disabled={isLoading || !usn.trim()}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Lookup"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
       </div>
     );
   }
@@ -197,20 +136,15 @@ export default function CandidateDashboardPage() {
           <div>
             <h1 className="text-3xl font-bold">Interview Dashboard</h1>
             <p className="text-muted-foreground">
-              Welcome, {candidate.name} ({candidate.usn})
+              Welcome, {candidate?.name || user?.email} ({candidate?.usn || "N/A"})
             </p>
           </div>
           <Button
             variant="outline"
-            onClick={() => {
-              localStorage.removeItem("candidate_usn");
-              setCandidate(null);
-              setInterview(null);
-              setUsn("");
-            }}
+            onClick={handleSignOut}
           >
-            <User className="mr-2 h-4 w-4" />
-            Switch Candidate
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
           </Button>
         </div>
       </div>
@@ -227,7 +161,7 @@ export default function CandidateDashboardPage() {
         </Alert>
       )}
 
-      {!interview && (
+      {!interview && !isLoading && (
         <Alert>
           <AlertTitle>No Interview Found</AlertTitle>
           <AlertDescription>
@@ -236,7 +170,7 @@ export default function CandidateDashboardPage() {
         </Alert>
       )}
 
-      {interview && (
+      {interview && candidate && (
         <>
           {/* Interview Status */}
           <Card>
@@ -412,3 +346,10 @@ export default function CandidateDashboardPage() {
   );
 }
 
+export default function CandidateDashboardPage() {
+  return (
+    <ProtectedRoute>
+      <CandidateDashboardContent />
+    </ProtectedRoute>
+  );
+}

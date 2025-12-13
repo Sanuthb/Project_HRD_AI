@@ -46,9 +46,9 @@ export default function HomePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href="/candidate/dashboard">
+              <Link href="/login">
                 <Button className="w-full" variant="outline">
-                  Go to Candidate Portal
+                  Sign In to Candidate Portal
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>

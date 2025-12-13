@@ -118,52 +118,96 @@ export async function updateCandidateStatus(
 }
 
 export async function getCandidateById(id: string): Promise<Candidate | null> {
-  const { data, error } = await supabase
-    .from('candidates')
-    .select('*')
-    .eq('id', id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('candidates')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle(); // Use maybeSingle() to handle no results gracefully
 
-  if (error) {
-    console.error('Error fetching candidate:', error);
+    if (error) {
+      console.error('Error fetching candidate:', error);
+      return null;
+    }
+
+    if (!data) {
+      return null;
+    }
+
+    return {
+      id: data.id,
+      name: data.name,
+      usn: data.usn,
+      email: data.email,
+      resume_score: data.resume_score,
+      resume_url: data.resume_url,
+      status: data.status,
+      interview_id: data.interview_id,
+      created_at: data.created_at,
+    };
+  } catch (error: any) {
+    console.error('Error in getCandidateById:', error);
     return null;
   }
-
-  return {
-    id: data.id,
-    name: data.name,
-    usn: data.usn,
-    email: data.email,
-    resume_score: data.resume_score,
-    resume_url: data.resume_url,
-    status: data.status,
-    interview_id: data.interview_id,
-    created_at: data.created_at,
-  };
 }
 
 export async function getCandidateByUSN(usn: string): Promise<Candidate | null> {
-  const { data, error } = await supabase
-    .from('candidates')
-    .select('*')
-    .eq('usn', usn.trim())
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('candidates')
+      .select('*')
+      .eq('usn', usn.trim())
+      .limit(1); // Use limit(1) instead of maybeSingle() to handle multiple results
 
-  if (error) {
-    console.error('Error fetching candidate by USN:', error);
+    if (error) {
+      console.error('Error fetching candidate by USN:', error);
+      return null;
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    // If multiple candidates exist with same USN, return the first one
+    // TODO: This should be handled with proper authentication
+    const candidate = data[0];
+
+    return {
+      id: candidate.id,
+      name: candidate.name,
+      usn: candidate.usn,
+      email: candidate.email,
+      resume_score: candidate.resume_score,
+      resume_url: candidate.resume_url,
+      status: candidate.status,
+      interview_id: candidate.interview_id,
+      created_at: candidate.created_at,
+    };
+  } catch (error: any) {
+    console.error('Error in getCandidateByUSN:', error);
     return null;
   }
+}
 
-  return {
-    id: data.id,
-    name: data.name,
-    usn: data.usn,
-    email: data.email,
-    resume_score: data.resume_score,
-    resume_url: data.resume_url,
-    status: data.status,
-    interview_id: data.interview_id,
-    created_at: data.created_at,
-  };
+export async function getCandidateByUserId(userId: string): Promise<Candidate | null> {
+  try {
+    // First get the user profile to find candidate_id
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('candidate_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileError || !profile?.candidate_id) {
+      console.error('Error fetching user profile:', profileError);
+      return null;
+    }
+
+    // Then get the candidate
+    return await getCandidateById(profile.candidate_id);
+  } catch (error: any) {
+    console.error('Error in getCandidateByUserId:', error);
+    return null;
+  }
 }
 

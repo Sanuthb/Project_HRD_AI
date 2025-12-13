@@ -7,5 +7,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase environment variables are not set. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your .env.local file');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: {
+    schema: 'public',
+  },
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+});
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,21 +9,20 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Upload, CheckCircle2, XCircle, FileText, Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
 import { updateCandidateResume } from "@/lib/services/candidates";
 import { uploadResume as uploadResumeFile } from "@/lib/services/storage";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { ProtectedRoute } from "@/components/protected-route";
 import { toast } from "sonner";
 
-export default function ResumeUploadPage() {
-  const [usn, setUsn] = useState("");
+function ResumeUploadContent() {
+  const { candidateId } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [uploaded, setUploaded] = useState(false);
   const [score, setScore] = useState<number | null>(null);
   const [eligible, setEligible] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [candidateFound, setCandidateFound] = useState(false);
-  const [candidateId, setCandidateId] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -35,41 +34,6 @@ export default function ResumeUploadPage() {
     }
   };
 
-  const handleLookupCandidate = async () => {
-    if (!usn.trim()) {
-      setError("Please enter your USN");
-      return;
-    }
-
-    setError(null);
-    setIsProcessing(true);
-
-    try {
-      const { data, error: lookupError } = await supabase
-        .from('candidates')
-        .select('id, name, interview_id')
-        .eq('usn', usn.trim())
-        .single();
-
-      if (lookupError || !data) {
-        setError("Candidate not found. Please check your USN or contact the administrator.");
-        setCandidateFound(false);
-        setCandidateId(null);
-      } else {
-        setCandidateFound(true);
-        setCandidateId(data.id);
-        toast.success(`Welcome, ${data.name}!`);
-      }
-    } catch (err: any) {
-      console.error("Error looking up candidate:", err);
-      setError(err.message || "Failed to lookup candidate");
-      setCandidateFound(false);
-      setCandidateId(null);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const handleUpload = async () => {
     if (!file) {
       setError("Please select a resume file");
@@ -77,7 +41,7 @@ export default function ResumeUploadPage() {
     }
 
     if (!candidateId) {
-      setError("Please lookup your USN first");
+      setError("No candidate profile linked. Please contact administrator.");
       return;
     }
 
@@ -136,40 +100,6 @@ export default function ResumeUploadPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Candidate Verification</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="usn">Enter your USN *</Label>
-            <div className="flex gap-2">
-              <Input
-                id="usn"
-                placeholder="e.g., 1NH20CS001"
-                value={usn}
-                onChange={(e) => setUsn(e.target.value)}
-                disabled={isProcessing || candidateFound}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleLookupCandidate}
-                disabled={isProcessing || candidateFound || !usn.trim()}
-              >
-                {isProcessing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Lookup"
-                )}
-              </Button>
-            </div>
-            {candidateFound && (
-              <p className="text-sm text-green-600">✓ Candidate verified</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>Resume Upload</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -202,7 +132,7 @@ export default function ResumeUploadPage() {
 
           <Button
             onClick={handleUpload}
-            disabled={!file || isProcessing || uploaded || !candidateFound}
+            disabled={!file || isProcessing || uploaded || !candidateId}
             className="w-full"
           >
             {isProcessing ? (
@@ -313,3 +243,10 @@ export default function ResumeUploadPage() {
   );
 }
 
+export default function ResumeUploadPage() {
+  return (
+    <ProtectedRoute>
+      <ResumeUploadContent />
+    </ProtectedRoute>
+  );
+}
