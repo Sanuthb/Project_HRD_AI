@@ -12,98 +12,9 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Candidate } from "@/lib/types";
 import { Eye, TrendingUp } from "lucide-react";
-
-// Dummy candidate data for different interviews
-const candidateData: Record<string, Candidate[]> = {
-  "1": [
-    {
-      id: "c1",
-      name: "Rohan Kumar",
-      usn: "1NH20CS001",
-      resumeScore: 85,
-      status: "Promoted",
-      interviewId: "1",
-    },
-    {
-      id: "c2",
-      name: "Ananya Singh",
-      usn: "1NH20CS014",
-      resumeScore: 72,
-      status: "Not Promoted",
-      interviewId: "1",
-    },
-    {
-      id: "c3",
-      name: "Vikram Rao",
-      usn: "1NH20CS032",
-      resumeScore: 90,
-      status: "Promoted",
-      interviewId: "1",
-    },
-    {
-      id: "c4",
-      name: "Priya Sharma",
-      usn: "1NH20CS045",
-      resumeScore: 68,
-      status: "Not Promoted",
-      interviewId: "1",
-    },
-    {
-      id: "c5",
-      name: "Arjun Patel",
-      usn: "1NH20CS052",
-      resumeScore: 88,
-      status: "Promoted",
-      interviewId: "1",
-    },
-  ],
-  "2": [
-    {
-      id: "c6",
-      name: "Sneha Reddy",
-      usn: "1NH20CS067",
-      resumeScore: 79,
-      status: "Promoted",
-      interviewId: "2",
-    },
-    {
-      id: "c7",
-      name: "Karan Malhotra",
-      usn: "1NH20CS078",
-      resumeScore: 65,
-      status: "Not Promoted",
-      interviewId: "2",
-    },
-  ],
-  "3": [
-    {
-      id: "c8",
-      name: "Meera Joshi",
-      usn: "1NH20CS089",
-      resumeScore: 92,
-      status: "Promoted",
-      interviewId: "3",
-    },
-  ],
-  "4": [
-    {
-      id: "c9",
-      name: "Rahul Verma",
-      usn: "1NH20CS095",
-      resumeScore: 75,
-      status: "Not Promoted",
-      interviewId: "4",
-    },
-  ],
-};
-
-// Dummy interview titles
-const interviewTitles: Record<string, string> = {
-  "1": "Software Engineer - Google",
-  "2": "Data Scientist - Microsoft",
-  "3": "Full Stack Developer - Amazon",
-  "4": "ML Engineer - Meta",
-};
+import { getInterviewById } from "@/lib/services/interviews";
+import { getCandidatesByInterview } from "@/lib/services/candidates";
+import { PromoteCandidateButton } from "./promote-button";
 
 interface PageProps {
   params: Promise<{ interviewId: string }>;
@@ -111,12 +22,21 @@ interface PageProps {
 
 export default async function InterviewDashboardPage({ params }: PageProps) {
   const { interviewId } = await params;
-  const candidates = candidateData[interviewId] || [];
-  const interviewTitle = interviewTitles[interviewId] || "Interview Dashboard";
+  
+  let interview = null;
+  let candidates: Candidate[] = [];
+  
+  try {
+    interview = await getInterviewById(interviewId);
+    candidates = await getCandidatesByInterview(interviewId);
+  } catch (error) {
+    console.error("Error fetching interview data:", error);
+  }
 
+  const interviewTitle = interview?.title || "Interview Dashboard";
   const totalCandidates = candidates.length;
   const promotedCount = candidates.filter((c) => c.status === "Promoted").length;
-  const completedCount = candidates.filter((c) => c.resumeScore > 0).length;
+  const completedCount = candidates.filter((c) => (c.resume_score || 0) > 0).length;
 
   return (
     <div className="space-y-6">
@@ -208,18 +128,24 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
                     </TableCell>
                     <TableCell>{candidate.usn}</TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <Progress value={candidate.resumeScore} />
-                        <span className="text-sm text-muted-foreground">
-                          {candidate.resumeScore}%
-                        </span>
-                      </div>
+                      {candidate.resume_score !== null && candidate.resume_score !== undefined ? (
+                        <div className="space-y-1">
+                          <Progress value={candidate.resume_score} />
+                          <span className="text-sm text-muted-foreground">
+                            {candidate.resume_score}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Not scored</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant={
                           candidate.status === "Promoted"
                             ? "default"
+                            : candidate.status === "Not Promoted"
+                            ? "destructive"
                             : "secondary"
                         }
                       >
@@ -232,10 +158,7 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
                         View
                       </Button>
                       {candidate.status === "Not Promoted" && (
-                        <Button size="sm">
-                          <TrendingUp className="mr-2 h-4 w-4" />
-                          Promote
-                        </Button>
+                        <PromoteCandidateButton candidateId={candidate.id} />
                       )}
                     </TableCell>
                   </TableRow>

@@ -4,52 +4,17 @@ import { Badge } from "@/components/ui/badge";
 import { Interview } from "@/lib/types";
 import Link from "next/link";
 import { Eye, Calendar, Users } from "lucide-react";
+import { getInterviews } from "@/lib/services/interviews";
 
-// Dummy interview data
-const interviews: Interview[] = [
-  {
-    id: "1",
-    title: "Software Engineer - Google",
-    jdName: "Google SWE JD 2024",
-    createdDate: "2024-01-15",
-    candidateCount: 45,
-    status: "Active",
-    interviewType: "Technical",
-    duration: 45,
-  },
-  {
-    id: "2",
-    title: "Data Scientist - Microsoft",
-    jdName: "Microsoft DS JD 2024",
-    createdDate: "2024-01-10",
-    candidateCount: 32,
-    status: "Active",
-    interviewType: "Mixed",
-    duration: 60,
-  },
-  {
-    id: "3",
-    title: "Full Stack Developer - Amazon",
-    jdName: "Amazon FSD JD 2024",
-    createdDate: "2024-01-05",
-    candidateCount: 58,
-    status: "Closed",
-    interviewType: "Coding Round",
-    duration: 90,
-  },
-  {
-    id: "4",
-    title: "ML Engineer - Meta",
-    jdName: "Meta MLE JD 2024",
-    createdDate: "2024-01-20",
-    candidateCount: 28,
-    status: "Active",
-    interviewType: "Technical",
-    duration: 45,
-  },
-];
+export default async function InterviewsPage() {
+  let interviews: Interview[] = [];
+  
+  try {
+    interviews = await getInterviews();
+  } catch (error) {
+    console.error("Error fetching interviews:", error);
+  }
 
-export default function InterviewsPage() {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -67,15 +32,22 @@ export default function InterviewsPage() {
         </p>
       </div>
 
-      <div className="grid gap-4">
-        {interviews.map((interview) => (
+      {interviews.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No interviews found. Create your first interview to get started.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {interviews.map((interview) => (
           <Card key={interview.id}>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <CardTitle className="text-xl">{interview.title}</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {interview.jdName}
+                    {interview.jd_name}
                   </p>
                 </div>
                 <Badge
@@ -89,14 +61,14 @@ export default function InterviewsPage() {
               <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground mb-4">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  <span>Created: {formatDate(interview.createdDate)}</span>
+                  <span>Created: {formatDate(interview.created_at)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  <span>{interview.candidateCount} candidates</span>
+                  <span>{interview.candidate_count || 0} candidates</span>
                 </div>
-                {interview.interviewType && (
-                  <span>Type: {interview.interviewType}</span>
+                {interview.interview_type && (
+                  <span>Type: {interview.interview_type}</span>
                 )}
                 {interview.duration && (
                   <span>Duration: {interview.duration} min</span>
@@ -110,8 +82,9 @@ export default function InterviewsPage() {
               </Link>
             </CardContent>
           </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

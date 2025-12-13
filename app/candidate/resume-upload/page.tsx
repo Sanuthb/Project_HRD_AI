@@ -8,14 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, CheckCircle2, XCircle, FileText } from "lucide-react";
+import { Upload, CheckCircle2, XCircle, FileText, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+import { updateCandidateResume } from "@/lib/services/candidates";
+import { uploadResume as uploadResumeFile } from "@/lib/services/storage";
+import { toast } from "sonner";
 
 export default function ResumeUploadPage() {
+  const [usn, setUsn] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploaded, setUploaded] = useState(false);
   const [score, setScore] = useState<number | null>(null);
   const [eligible, setEligible] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [candidateFound, setCandidateFound] = useState(false);
+  const [candidateId, setCandidateId] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -23,21 +31,86 @@ export default function ResumeUploadPage() {
       setUploaded(false);
       setScore(null);
       setEligible(null);
+      setError(null);
     }
   };
 
-  const handleUpload = () => {
-    if (!file) return;
+  const handleLookupCandidate = async () => {
+    if (!usn.trim()) {
+      setError("Please enter your USN");
+      return;
+    }
 
+    setError(null);
     setIsProcessing(true);
-    // Simulate AI processing
-    setTimeout(() => {
-      const mockScore = Math.floor(Math.random() * 30) + 70; // Score between 70-100
-      setScore(mockScore);
-      setEligible(mockScore >= 75);
-      setUploaded(true);
+
+    try {
+      const { data, error: lookupError } = await supabase
+        .from('candidates')
+        .select('id, name, interview_id')
+        .eq('usn', usn.trim())
+        .single();
+
+      if (lookupError || !data) {
+        setError("Candidate not found. Please check your USN or contact the administrator.");
+        setCandidateFound(false);
+        setCandidateId(null);
+      } else {
+        setCandidateFound(true);
+        setCandidateId(data.id);
+        toast.success(`Welcome, ${data.name}!`);
+      }
+    } catch (err: any) {
+      console.error("Error looking up candidate:", err);
+      setError(err.message || "Failed to lookup candidate");
+      setCandidateFound(false);
+      setCandidateId(null);
+    } finally {
       setIsProcessing(false);
-    }, 2000);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      setError("Please select a resume file");
+      return;
+    }
+
+    if (!candidateId) {
+      setError("Please lookup your USN first");
+      return;
+    }
+
+    setError(null);
+    setIsProcessing(true);
+
+    try {
+      // Upload resume file
+      toast.info("Uploading resume...");
+      const resumeUrl = await uploadResumeFile(file, candidateId);
+
+      // Simulate AI processing (in production, this would call an AI service)
+      toast.info("Analyzing resume with AI...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const mockScore = Math.floor(Math.random() * 30) + 70; // Score between 70-100
+      const isEligible = mockScore >= 75;
+
+      // Update candidate record
+      await updateCandidateResume(candidateId, resumeUrl, mockScore);
+
+      setScore(mockScore);
+      setEligible(isEligible);
+      setUploaded(true);
+      
+      toast.success("Resume uploaded and analyzed successfully!");
+    } catch (err: any) {
+      console.error("Error uploading resume:", err);
+      setError(err.message || "Failed to upload resume. Please try again.");
+      toast.error(err.message || "Failed to upload resume");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -48,6 +121,52 @@ export default function ResumeUploadPage() {
           Upload your resume for AI-powered screening
         </p>
       </div>
+
+      {error && (
+        <Alert className="border-red-500 bg-red-50 dark:bg-red-950">
+          <XCircle className="h-4 w-4 text-red-600" />
+          <AlertTitle className="text-red-800 dark:text-red-200">
+            Error
+          </AlertTitle>
+          <AlertDescription className="text-red-700 dark:text-red-300">
+            {error}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Candidate Verification</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="usn">Enter your USN *</Label>
+            <div className="flex gap-2">
+              <Input
+                id="usn"
+                placeholder="e.g., 1NH20CS001"
+                value={usn}
+                onChange={(e) => setUsn(e.target.value)}
+                disabled={isProcessing || candidateFound}
+                className="flex-1"
+              />
+              <Button
+                onClick={handleLookupCandidate}
+                disabled={isProcessing || candidateFound || !usn.trim()}
+              >
+                {isProcessing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Lookup"
+                )}
+              </Button>
+            </div>
+            {candidateFound && (
+              <p className="text-sm text-green-600">✓ Candidate verified</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -83,12 +202,12 @@ export default function ResumeUploadPage() {
 
           <Button
             onClick={handleUpload}
-            disabled={!file || isProcessing || uploaded}
+            disabled={!file || isProcessing || uploaded || !candidateFound}
             className="w-full"
           >
             {isProcessing ? (
               <>
-                <Upload className="mr-2 h-4 w-4 animate-pulse" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing...
               </>
             ) : (
