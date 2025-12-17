@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/sidebar";
-import { LayoutDashboard, FileText, PlusCircle } from "lucide-react";
+import { LayoutDashboard, FileText, PlusCircle, Users } from "lucide-react";
 
 const adminLinks = [
   {
@@ -16,6 +16,11 @@ const adminLinks = [
     href: "/admin/interviews",
     label: "Interviews",
     icon: <FileText className="h-4 w-4" />,
+  },
+  {
+    href: "/admin/users",
+    label: "Users",
+    icon: <Users className="h-4 w-4" />,
   },
 ];
 

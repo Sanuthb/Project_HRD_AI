@@ -191,20 +191,53 @@ export async function getCandidateByUSN(usn: string): Promise<Candidate | null> 
 
 export async function getCandidateByUserId(userId: string): Promise<Candidate | null> {
   try {
-    // First get the user profile to find candidate_id
+    // First get the user profile to find USN (and candidate_id if needed)
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('candidate_id')
+      .select('candidate_id, usn')
       .eq('id', userId)
       .maybeSingle();
 
-    if (profileError || !profile?.candidate_id) {
+    if (profileError || !profile) {
       console.error('Error fetching user profile:', profileError);
       return null;
     }
 
-    // Then get the candidate
-    return await getCandidateById(profile.candidate_id);
+    // Prefer looking up by USN so that a candidate can have multiple interview rows.
+    if (profile.usn) {
+      try {
+        const { data, error } = await supabase
+          .from('candidates')
+          .select('*')
+          .eq('usn', profile.usn)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const candidate = data[0];
+          return {
+            id: candidate.id,
+            name: candidate.name,
+            usn: candidate.usn,
+            email: candidate.email,
+            resume_score: candidate.resume_score,
+            resume_url: candidate.resume_url,
+            status: candidate.status,
+            interview_id: candidate.interview_id,
+            created_at: candidate.created_at,
+          };
+        }
+      } catch (err) {
+        console.error('Error fetching candidate by USN from user profile:', err);
+      }
+    }
+
+    // Fallback: use candidate_id if present
+    if (profile.candidate_id) {
+      return await getCandidateById(profile.candidate_id);
+    }
+
+    return null;
   } catch (error: any) {
     console.error('Error in getCandidateByUserId:', error);
     return null;

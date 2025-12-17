@@ -12,13 +12,14 @@ CREATE TABLE IF NOT EXISTS interviews (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create candidates table
 CREATE TABLE IF NOT EXISTS candidates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   usn TEXT NOT NULL,
   email TEXT,
-  interview_id UUID NOT NULL REFERENCES interviews(id) ON DELETE CASCADE,
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  batch TEXT,
+  dept TEXT,
   resume_score INTEGER,
   resume_url TEXT,
   status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Promoted', 'Not Promoted', 'Pending')),

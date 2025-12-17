@@ -103,11 +103,9 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm">
-            <span className="text-muted-foreground">Don't have an account? </span>
-            <Link href="/signup" className="text-primary hover:underline">
-              Sign up
-            </Link>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Accounts are created and managed by your placement administrator.{" "}
+            Please contact your admin if you don't have login credentials.
           </div>
 
           <div className="mt-4 text-center">

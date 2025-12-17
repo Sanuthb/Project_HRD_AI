@@ -20,6 +20,9 @@ function ResumeUploadContent() {
   const [file, setFile] = useState<File | null>(null);
   const [uploaded, setUploaded] = useState(false);
   const [score, setScore] = useState<number | null>(null);
+  const [skillsScore, setSkillsScore] = useState<number | null>(null);
+  const [projectsScore, setProjectsScore] = useState<number | null>(null);
+  const [experienceScore, setExperienceScore] = useState<number | null>(null);
   const [eligible, setEligible] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +32,9 @@ function ResumeUploadContent() {
       setFile(e.target.files[0]);
       setUploaded(false);
       setScore(null);
+      setSkillsScore(null);
+      setProjectsScore(null);
+      setExperienceScore(null);
       setEligible(null);
       setError(null);
     }
@@ -49,21 +55,44 @@ function ResumeUploadContent() {
     setIsProcessing(true);
 
     try {
-      // Upload resume file
       toast.info("Uploading resume...");
       const resumeUrl = await uploadResumeFile(file, candidateId);
 
-      // Simulate AI processing (in production, this would call an AI service)
+      // Call backend AI resume analysis (LangChain + Gemini)
       toast.info("Analyzing resume with AI...");
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const mockScore = Math.floor(Math.random() * 30) + 70; // Score between 70-100
-      const isEligible = mockScore >= 75;
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/parse-resume", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const message = data.error || "Failed to analyze resume";
+        throw new Error(message);
+      }
+
+      const result = await response.json();
+      const analysis = result.data as {
+        skillsMatchScore: number;
+        projectRelevanceScore: number;
+        experienceSuitabilityScore: number;
+        overallScore: number;
+        overallRating: string;
+      };
+
+      const overallScore = analysis.overallScore ?? 0;
+      const isEligible = overallScore >= 75;
 
       // Update candidate record
-      await updateCandidateResume(candidateId, resumeUrl, mockScore);
+      await updateCandidateResume(candidateId, resumeUrl, overallScore);
 
-      setScore(mockScore);
+      setScore(overallScore);
+      setSkillsScore(analysis.skillsMatchScore ?? null);
+      setProjectsScore(analysis.projectRelevanceScore ?? null);
+      setExperienceScore(analysis.experienceSuitabilityScore ?? null);
       setEligible(isEligible);
       setUploaded(true);
       
@@ -166,20 +195,28 @@ function ResumeUploadContent() {
                 <Progress value={score} className="h-3" />
               </div>
 
-              <div className="grid gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Skills Match</span>
-                  <span className="font-medium">85%</span>
+              {skillsScore !== null || projectsScore !== null || experienceScore !== null ? (
+                <div className="grid gap-2 text-sm">
+                  {skillsScore !== null && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Skills Match</span>
+                      <span className="font-medium">{skillsScore}%</span>
+                    </div>
+                  )}
+                  {projectsScore !== null && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Project Relevance</span>
+                      <span className="font-medium">{projectsScore}%</span>
+                    </div>
+                  )}
+                  {experienceScore !== null && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Experience Suitability</span>
+                      <span className="font-medium">{experienceScore}%</span>
+                    </div>
+                  )}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Experience Relevance</span>
-                  <span className="font-medium">78%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Education Match</span>
-                  <span className="font-medium">92%</span>
-                </div>
-              </div>
+              ) : null}
             </CardContent>
           </Card>
 

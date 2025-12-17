@@ -16,10 +16,12 @@ export interface Candidate {
   name: string;
   usn: string;
   email?: string;
+  batch?: string;
+  dept?: string;
   resume_score?: number;
   resume_url?: string;
   status: "Promoted" | "Not Promoted" | "Pending";
-  interview_id: string;
+  interview_id?: string;
   created_at?: string;
 }
 
