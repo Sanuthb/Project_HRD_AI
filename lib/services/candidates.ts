@@ -12,7 +12,7 @@ export async function createCandidate(data: {
     .from('candidates')
     .insert([{
       name: data.name,
-      usn: data.usn,
+      usn: data.usn.trim(),
       email: data.email,
       interview_id: data.interview_id,
       status: data.status || 'Pending',
@@ -28,6 +28,13 @@ export async function createCandidate(data: {
   return candidate;
 }
 
+/**
+ * Create or update candidates for an interview in bulk.
+ *
+ * We intentionally avoid creating duplicate rows for the same USN.
+ * If a candidate already exists with the same USN, we REUSE that row
+ * and update its interview_id / basic fields instead of inserting a new one.
+ */
 export async function createCandidatesBulk(
   candidates: Array<{
     name: string;
@@ -36,25 +43,70 @@ export async function createCandidatesBulk(
     interview_id: string;
   }>
 ) {
-  const { data, error } = await supabase
-    .from('candidates')
-    .insert(
-      candidates.map(c => ({
-        name: c.name,
-        usn: c.usn,
-        email: c.email,
-        interview_id: c.interview_id,
-        status: 'Pending',
-      }))
-    )
-    .select();
+  const createdOrUpdated: any[] = [];
 
-  if (error) {
-    console.error('Error creating candidates:', error);
-    throw error;
+  for (const candidate of candidates) {
+    const usn = candidate.usn.trim();
+
+    // 1) Check if we already have a candidate for this USN
+    const { data: existingList, error: existingError } = await supabase
+      .from('candidates')
+      .select('*')
+      .eq('usn', usn)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (existingError) {
+      console.error('Error checking for existing candidate in bulk create:', existingError);
+      throw existingError;
+    }
+
+    const existing = existingList && existingList.length > 0 ? existingList[0] : null;
+
+    if (existing) {
+      // 2a) Reuse existing candidate row – update interview & basic data
+      const { data, error } = await supabase
+        .from('candidates')
+        .update({
+          name: candidate.name,
+          email: candidate.email,
+          interview_id: candidate.interview_id,
+          status: 'Pending',
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating existing candidate in bulk create:', error);
+        throw error;
+      }
+
+      createdOrUpdated.push(data);
+    } else {
+      // 2b) No existing candidate – create a new one
+      const { data, error } = await supabase
+        .from('candidates')
+        .insert([{
+          name: candidate.name,
+          usn,
+          email: candidate.email,
+          interview_id: candidate.interview_id,
+          status: 'Pending',
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating candidate in bulk create:', error);
+        throw error;
+      }
+
+      createdOrUpdated.push(data);
+    }
   }
 
-  return data;
+  return createdOrUpdated;
 }
 
 export async function getCandidatesByInterview(interviewId: string): Promise<Candidate[]> {

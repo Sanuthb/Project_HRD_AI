@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Clock, FileText, CheckCircle2, XCircle, LogOut } from "lucide-react";
 import { Candidate, Interview } from "@/lib/types";
-import { getCandidateById } from "@/lib/services/candidates";
+import { getCandidateByUserId } from "@/lib/services/candidates";
 import { getInterviewById } from "@/lib/services/interviews";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -31,9 +31,9 @@ function CandidateDashboardContent() {
   // Fetch candidate and interview data
   useEffect(() => {
     const fetchData = async () => {
-      if (!candidateId) {
+      if (!user) {
         setIsLoading(false);
-        setError("No candidate profile linked to your account. Please contact administrator.");
+        setError("You must be logged in to view the dashboard.");
         return;
       }
 
@@ -41,11 +41,11 @@ function CandidateDashboardContent() {
       setError(null);
 
       try {
-        // Fetch candidate data
-        const candidateData = await getCandidateById(candidateId);
+        // Fetch candidate data using the logged-in user's profile (USN / candidate_id)
+        const candidateData = await getCandidateByUserId(user.id);
 
         if (!candidateData) {
-          setError("Candidate profile not found. Please contact administrator.");
+          setError("No interview assigned to this account. Please contact the administrator.");
           setIsLoading(false);
           return;
         }
@@ -73,7 +73,7 @@ function CandidateDashboardContent() {
     };
 
     fetchData();
-  }, [candidateId]);
+  }, [user]);
 
   // Update countdown timer
   useEffect(() => {
