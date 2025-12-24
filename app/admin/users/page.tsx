@@ -15,8 +15,26 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2 } from "lucide-react";
+import { Loader2, Edit2, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface AdminUser {
   id: string;
@@ -44,32 +62,39 @@ export default function AdminUsersPage() {
 
   const [filterBatch, setFilterBatch] = useState<string>("");
   const [filterDept, setFilterDept] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [deletingUsn, setDeletingUsn] = useState<string | null>(null);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/users");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to load users");
+      }
+      const data = await res.json();
+      setUsers(data.data || []);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Load users via API
-        const res = await fetch("/api/admin/users");
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to load users");
-        }
-        const data = await res.json();
-        setUsers(data.data || []);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || "Failed to load users");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
+    loadUsers();
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
+    // ... existing handleCreate logic is fine, but I'll update it to use loadUsers for consistency if needed
+    // Actually the existing logic manually adds to state, which is fine for performance.
     e.preventDefault();
     setError(null);
 
@@ -122,6 +147,64 @@ export default function AdminUsersPage() {
       toast.error(err.message || "Failed to create user");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDelete = async (usn: string) => {
+    setDeletingUsn(usn);
+    try {
+      const res = await fetch(`/api/admin/users/${usn}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete user");
+      }
+
+      toast.success("User deleted successfully");
+      setUsers((prev) => prev.filter((u) => u.usn !== usn));
+    } catch (err: any) {
+      console.error("Error deleting user:", err);
+      toast.error(err.message || "Failed to delete user");
+    } finally {
+      setDeletingUsn(null);
+    }
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setUpdating(true);
+    try {
+      const res = await fetch(`/api/admin/users/${editingUser.usn}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: editingUser.name,
+          email: editingUser.email,
+          batch: editingUser.batch,
+          dept: editingUser.dept,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update user");
+      }
+
+      toast.success("User updated successfully");
+      setUsers((prev) =>
+        prev.map((u) => (u.usn === editingUser.usn ? editingUser : u))
+      );
+      setIsEditDialogOpen(false);
+    } catch (err: any) {
+      console.error("Error updating user:", err);
+      toast.error(err.message || "Failed to update user");
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -226,6 +309,16 @@ export default function AdminUsersPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <CardTitle>Users</CardTitle>
             <div className="flex flex-wrap gap-3 text-sm">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search name or USN..."
+                  className="w-64 pl-9 text-xs"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
               <div className="space-y-1">
                 <span className="block text-xs font-medium text-muted-foreground">
                   Filter by Batch
@@ -270,6 +363,14 @@ export default function AdminUsersPage() {
         <CardContent>
           {(() => {
             let filtered = users;
+            if (searchTerm) {
+              const lower = searchTerm.toLowerCase();
+              filtered = filtered.filter(
+                (u) =>
+                  u.name.toLowerCase().includes(lower) ||
+                  u.usn.toLowerCase().includes(lower)
+              );
+            }
             if (filterBatch) {
               filtered = filtered.filter((u) => u.batch === filterBatch);
             }
@@ -304,6 +405,7 @@ export default function AdminUsersPage() {
                     <TableHead>Batch</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Auth Account</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -321,6 +423,45 @@ export default function AdminUsersPage() {
                           {u.hasAuthUser ? "Linked" : "No Account"}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingUser({ ...u });
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently delete the user "<strong>{u.name}</strong>" (USN: {u.usn}), their auth account, and all their candidate records.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDelete(u.usn)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  {deletingUsn === u.usn ? "Deleting..." : "Delete"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -329,6 +470,95 @@ export default function AdminUsersPage() {
           })()}
         </CardContent>
       </Card>
+
+      {/* Edit User Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User Details</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdate} className="space-y-4 py-4">
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editingUser?.name || ""}
+                  onChange={(e) =>
+                    setEditingUser((prev) =>
+                      prev ? { ...prev, name: e.target.value } : null
+                    )
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-usn">USN (Not editable)</Label>
+                <Input id="edit-usn" value={editingUser?.usn || ""} disabled />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editingUser?.email || ""}
+                  onChange={(e) =>
+                    setEditingUser((prev) =>
+                      prev ? { ...prev, email: e.target.value } : null
+                    )
+                  }
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-batch">Batch</Label>
+                  <Input
+                    id="edit-batch"
+                    value={editingUser?.batch || ""}
+                    onChange={(e) =>
+                      setEditingUser((prev) =>
+                        prev ? { ...prev, batch: e.target.value } : null
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-dept">Department</Label>
+                  <Input
+                    id="edit-dept"
+                    value={editingUser?.dept || ""}
+                    onChange={(e) =>
+                      setEditingUser((prev) =>
+                        prev ? { ...prev, dept: e.target.value } : null
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updating}>
+                {updating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

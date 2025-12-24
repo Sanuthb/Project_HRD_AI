@@ -11,10 +11,13 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Candidate } from "@/lib/types";
-import { Eye, TrendingUp } from "lucide-react";
-import { getInterviewById } from "@/lib/services/interviews";
+import { TrendingUp } from "lucide-react";
 import { getCandidatesByInterview } from "@/lib/services/candidates";
-import { PromoteCandidateButton } from "./promote-button";
+import { getInterviewById } from "@/lib/services/interviews";
+import { CandidateTable } from "@/components/admin/CandidateTable";
+import { AddCandidateModal } from "@/components/admin/AddCandidateModal";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ interviewId: string }>;
@@ -40,11 +43,19 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">{interviewTitle}</h1>
-        <p className="text-muted-foreground">
-          Interview results and candidate performance
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Link href="/admin/interviews" className="text-muted-foreground hover:text-primary transition-colors">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <h1 className="text-3xl font-bold">{interviewTitle}</h1>
+          </div>
+          <p className="text-muted-foreground">
+            Interview results and candidate performance
+          </p>
+        </div>
+        <AddCandidateModal interviewId={interviewId} />
       </div>
 
       {/* Stats Cards */}
@@ -103,69 +114,7 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
           <CardTitle>Candidate Results</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>USN</TableHead>
-                <TableHead>Resume Score</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {candidates.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No candidates found for this interview
-                  </TableCell>
-                </TableRow>
-              ) : (
-                candidates.map((candidate) => (
-                  <TableRow key={candidate.id}>
-                    <TableCell className="font-medium">
-                      {candidate.name}
-                    </TableCell>
-                    <TableCell>{candidate.usn}</TableCell>
-                    <TableCell>
-                      {candidate.resume_score !== null && candidate.resume_score !== undefined ? (
-                        <div className="space-y-1">
-                          <Progress value={candidate.resume_score} />
-                          <span className="text-sm text-muted-foreground">
-                            {candidate.resume_score}%
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Not scored</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          candidate.status === "Promoted"
-                            ? "default"
-                            : candidate.status === "Not Promoted"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {candidate.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button size="sm" variant="outline">
-                        <Eye className="mr-2 h-4 w-4" />
-                        View
-                      </Button>
-                      {candidate.status === "Not Promoted" && (
-                        <PromoteCandidateButton candidateId={candidate.id} />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <CandidateTable candidates={candidates} />
         </CardContent>
       </Card>
     </div>

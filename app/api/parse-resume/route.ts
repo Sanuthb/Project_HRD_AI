@@ -20,9 +20,10 @@ export async function POST(request: NextRequest) {
     let resumeText = "";
 
     if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-      const loader = new WebPDFLoader(file);
-      const docs = await loader.load();
-      resumeText = docs.map((d) => d.pageContent).join("\n");
+      // Create a Blob from the file
+      const blob = new Blob([await file.arrayBuffer()], { type: "application/pdf" });
+      const { parseResume } = await import("@/lib/services/resume-parser");
+      resumeText = await parseResume(blob);
     } else {
       // Fallback: read as text for DOC/DOCX or other text-like formats
       const arrayBuffer = await file.arrayBuffer();
@@ -36,27 +37,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const jdText = formData.get("jd_text") as string | null;
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const prompt = `You are evaluating a candidate's resume for a placement screening system.
+    const prompt = `You are evaluating a candidate's resume for a specific job description.
 
-Analyze the resume text below and return a JSON object with detailed scores.
+    **Job Description:**
+    ${jdText || "No specific job description provided. Evaluate based on general software engineering standards."}
 
-Resume:
-${resumeText}
+    **Candidate Resume:**
+    ${resumeText.substring(0, 10000)}
 
-Return JSON in the following structure (numbers between 0 and 100):
-{
-  "skillsMatchScore": 0,
-  "projectRelevanceScore": 0,
-  "experienceSuitabilityScore": 0,
-  "overallScore": 0,
-  "overallRating": "Poor | Average | Good | Great",
-  "strengths": ["brief bullet", "another bullet"],
-  "weaknesses": ["brief bullet", "another bullet"]
-}
-
-Return ONLY valid JSON, no extra text.`;
+    **Task:**
+    Analyze the resume specifically against the provided Job Description. 
+    - strict matching of skills and experience to the JD.
+    - If the JD mentions specific technologies, prioritize them heavily.
+    
+    Return a JSON object with scores (0-100).
+    
+    Return JSON in the following structure:
+    {
+      "skillsMatchScore": 0,
+      "projectRelevanceScore": 0,
+      "experienceSuitabilityScore": 0,
+      "overallScore": 0,
+      "overallRating": "Poor | Average | Good | Great",
+      "strengths": ["bullet", "bullet"],
+      "weaknesses": ["bullet", "bullet"]
+    }
+    
+    Return ONLY valid JSON.`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;

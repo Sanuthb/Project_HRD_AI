@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,14 +10,16 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Upload, CheckCircle2, XCircle, FileText, Loader2 } from "lucide-react";
-import { updateCandidateResume } from "@/lib/services/candidates";
+import { updateCandidateResume, getCandidateById } from "@/lib/services/candidates";
 import { uploadResume as uploadResumeFile } from "@/lib/services/storage";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { toast } from "sonner";
 
 function ResumeUploadContent() {
+  const router = useRouter();
   const { candidateId } = useAuth();
+  const [interviewId, setInterviewId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploaded, setUploaded] = useState(false);
   const [score, setScore] = useState<number | null>(null);
@@ -103,6 +106,32 @@ function ResumeUploadContent() {
       toast.error(err.message || "Failed to upload resume");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchCandidateData = async () => {
+      if (!candidateId) return;
+      try {
+        const data = await getCandidateById(candidateId);
+        if (data?.interview_id) {
+          setInterviewId(data.interview_id);
+        }
+      } catch (err) {
+        console.error("Error fetching candidate data:", err);
+      }
+    };
+
+    if (uploaded) {
+      fetchCandidateData();
+    }
+  }, [candidateId, uploaded]);
+
+  const handleTakeInterview = () => {
+    if (interviewId) {
+      router.push(`/candidate/interview/${interviewId}`);
+    } else {
+      toast.error("Interview ID not found. Please contact administrator.");
     }
   };
 
@@ -256,7 +285,7 @@ function ResumeUploadContent() {
           </Alert>
 
           {/* Eligibility Badge */}
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-4">
             <Badge
               variant={eligible ? "default" : "destructive"}
               className="text-lg px-6 py-2"
@@ -273,6 +302,16 @@ function ResumeUploadContent() {
                 </>
               )}
             </Badge>
+
+            {eligible && (
+              <Button 
+                size="lg" 
+                onClick={handleTakeInterview}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+              >
+                Take Interview Sekarang
+              </Button>
+            )}
           </div>
         </>
       )}

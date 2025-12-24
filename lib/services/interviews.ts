@@ -124,3 +124,15 @@ export async function updateInterviewStatus(
   await updateInterview(id, { status });
 }
 
+export async function deleteInterview(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('interviews')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting interview:', error);
+    throw error;
+  }
+}
+

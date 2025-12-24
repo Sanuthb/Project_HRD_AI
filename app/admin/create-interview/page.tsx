@@ -81,7 +81,7 @@ export default function CreateInterviewPage() {
     }
   };
 
-  const parseExcelFile = async (file: File): Promise<Array<{ name: string; usn: string; email?: string }>> => {
+  const parseExcelFile = async (file: File): Promise<Array<{ name: string; usn: string; email?: string; batch?: string; dept?: string }>> => {
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
     const text = await file.text();
     
@@ -108,6 +108,8 @@ export default function CreateInterviewPage() {
       const nameIndex = headers.findIndex(h => h.includes('name') && !h.includes('usn'));
       const usnIndex = headers.findIndex(h => h.includes('usn') || h.includes('student') || h.includes('id'));
       const emailIndex = headers.findIndex(h => h.includes('email') || h.includes('mail'));
+      const batchIndex = headers.findIndex(h => h.includes('batch') || h.includes('year'));
+      const deptIndex = headers.findIndex(h => h.includes('dept') || h.includes('department') || h.includes('branch'));
 
       if (nameIndex === -1 || usnIndex === -1) {
         throw new Error(
@@ -133,12 +135,16 @@ export default function CreateInterviewPage() {
         const name = values[nameIndex]?.trim();
         const usn = values[usnIndex]?.trim();
         const email = emailIndex >= 0 ? values[emailIndex]?.trim() : undefined;
+        const batch = batchIndex >= 0 ? values[batchIndex]?.trim() : undefined;
+        const dept = deptIndex >= 0 ? values[deptIndex]?.trim() : undefined;
 
         if (name && usn) {
           candidates.push({
             name,
             usn,
             email: email || undefined,
+            batch: batch || undefined,
+            dept: dept || undefined,
           });
         }
       }
@@ -215,7 +221,7 @@ export default function CreateInterviewPage() {
 
       // Parse and create candidates
       toast.info("Processing candidates...");
-      let candidates: Array<{ name: string; usn: string; email?: string }>;
+      let candidates: Array<{ name: string; usn: string; email?: string; batch?: string; dept?: string }>;
       
       try {
         candidates = await parseExcelFile(candidatesFile);
@@ -229,14 +235,22 @@ export default function CreateInterviewPage() {
 
       toast.info(`Found ${candidates.length} candidate(s) in the file`);
 
-      await createCandidatesBulk(
+      const result = await createCandidatesBulk(
         candidates.map(c => ({
           ...c,
           interview_id: interview.id,
         }))
       );
 
-      toast.success("Interview created successfully!");
+      if (result.skipped && result.skipped.length > 0) {
+        const skippedUsns = result.skipped.map(s => s.usn).join(', ');
+        toast.warning(
+          `Interview created, but ${result.skipped.length} students were skipped because they don't have an account: ${skippedUsns}`,
+          { duration: 8000 }
+        );
+      } else {
+        toast.success("Interview created and all candidates assigned successfully!");
+      }
       setShowSuccess(true);
 
       // Reset form
@@ -450,11 +464,11 @@ export default function CreateInterviewPage() {
                 />
               </div>
               <p className="text-sm text-muted-foreground">
-                Upload a CSV file containing candidate information. Required columns: <strong>Name</strong>, <strong>USN</strong> (optional: Email)
+                Upload a CSV file containing candidate information. Required columns: <strong>Name</strong>, <strong>USN</strong> (optional: Email, Batch, Department)
               </p>
               <div className="text-xs text-muted-foreground mt-1 space-y-1">
                 <p>Example CSV format:</p>
-                <code className="text-xs bg-muted p-1 rounded block">Name,USN,Email<br />John Doe,1NH20CS001,john@example.com</code>
+                <code className="text-xs bg-muted p-1 rounded block">Name,USN,Email,Batch,Department<br />John Doe,1NH20CS001,john@example.com,2024,CSE</code>
                 <a 
                   href="/sample-candidates.csv" 
                   download 

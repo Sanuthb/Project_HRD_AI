@@ -1,24 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-if (!supabaseUrl || !serviceRoleKey) {
-  console.warn(
-    "Supabase service role environment variables are not set. Admin user management will not work. Please add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to your .env.local file (service key must NEVER be exposed to the client)."
-  );
-}
-
-// Server-only Supabase client with service role.
-// This file must only ever be imported from server-side code (API routes, server components).
-const adminSupabase = supabaseUrl && serviceRoleKey
-  ? createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
-  : null;
+import { adminSupabase } from '@/lib/supabase/admin';
 
 export interface AdminUserRecord {
   id: string;
@@ -44,7 +24,7 @@ export interface CreateAuthUsersResult {
   skipped: { candidateId: string; reason: string }[];
 }
 
-// List all candidate "users" with whether they have an auth account.
+// List all unique "users" (students) by deduplicating candidates based on USN.
 export async function listAdminUsers(): Promise<AdminUserRecord[]> {
   if (!adminSupabase) {
     throw new Error("Admin Supabase client is not configured on the server.");
@@ -65,53 +45,64 @@ export async function listAdminUsers(): Promise<AdminUserRecord[]> {
     return [];
   }
 
-  const candidateIds = candidates.map((c: any) => c.id);
-  const interviewIds = Array.from(
-    new Set(candidates.map((c: any) => c.interview_id).filter(Boolean))
-  );
-
-  // Fetch user_profiles to know which candidates are linked
+  // Fetch IDs of candidates that are linked to a user_profile (legacy check)
+  // BUT what we really care about is if the USN is linked.
+  // Let's fetch all user_profiles to map USN -> hasAccount
   const { data: profiles, error: profilesError } = await adminSupabase
     .from("user_profiles")
-    .select("candidate_id")
-    .in("candidate_id", candidateIds);
+    .select("usn, candidate_id");
 
   if (profilesError) {
     console.error("Error fetching user_profiles:", profilesError);
     throw profilesError;
   }
 
-  const linkedCandidateIds = new Set(
-    (profiles || []).map((p: any) => p.candidate_id as string)
-  );
-
-  // Fetch interviews for display (title)
-  const { data: interviews, error: interviewsError } = await adminSupabase
-    .from("interviews")
-    .select("id, title")
-    .in("id", interviewIds);
-
-  if (interviewsError) {
-    console.error("Error fetching interviews for admin users:", interviewsError);
-    throw interviewsError;
-  }
-
-  const interviewTitleById = new Map<string, string>();
-  (interviews || []).forEach((i: any) => {
-    interviewTitleById.set(i.id, i.title);
+  const registeredUSNs = new Set<string>();
+  const linkedCandidateIds = new Set<string>();
+  
+  (profiles || []).forEach((p: any) => {
+    if (p.usn) registeredUSNs.add(p.usn);
+    if (p.candidate_id) linkedCandidateIds.add(p.candidate_id);
   });
 
-  return (candidates as any[]).map((c) => ({
-    id: c.id as string,
-    name: c.name as string,
-    usn: c.usn as string,
-    email: c.email ?? null,
-    batch: c.batch ?? null,
-    dept: c.dept ?? null,
-    interviewId: (c.interview_id as string) ?? null,
-    interviewTitle: interviewTitleById.get(c.interview_id) ?? null,
-    hasAuthUser: linkedCandidateIds.has(c.id),
-  }));
+  // Deduplicate candidates by USN
+  const uniqueUsersMap = new Map<string, AdminUserRecord>();
+
+  for (const c of candidates) {
+    const usn = c.usn;
+    if (!usn) continue;
+
+    // We want the most recent info, and candidates are ordered by created_at desc.
+    // So the first time we see a USN, that's the latest one.
+    if (!uniqueUsersMap.has(usn)) {
+      uniqueUsersMap.set(usn, {
+        id: c.id, // ID of the latest candidate record
+        name: c.name,
+        usn: c.usn,
+        email: c.email ?? null,
+        batch: c.batch ?? null,
+        dept: c.dept ?? null,
+        interviewId: c.interview_id ?? null,
+        interviewTitle: null, // Title logic is tricky with deduplication, maybe omit or join
+        hasAuthUser: registeredUSNs.has(usn) || linkedCandidateIds.has(c.id),
+      });
+    } else {
+      // Optional: If the existing entry has missing details (like null batch) but this older one has it, fill it in?
+      const existing = uniqueUsersMap.get(usn)!;
+      if (!existing.batch && c.batch) existing.batch = c.batch;
+      if (!existing.dept && c.dept) existing.dept = c.dept;
+      // We don't overwrite name/email from older records usually
+    }
+  }
+  
+  // Convert map to array
+  const uniqueUsers = Array.from(uniqueUsersMap.values());
+
+  // If we really need interview titles, we'd have to decide WHICH interview to show. 
+  // For a "User Management" view, interview specific info is less important than User info.
+  // We can leave interviewTitle null or 'Multiple'
+
+  return uniqueUsers;
 }
 
 // Create a candidate + Supabase Auth user and link them.
@@ -128,7 +119,18 @@ export async function createAdminUser(input: {
 
   const { name, usn, email, batch, dept } = input;
 
-  // 1) Reuse existing candidate if one already exists for this USN (to avoid duplicates)
+  // 0) Check if a user with this USN already exists in user_profiles
+  const { data: existingProfile } = await adminSupabase
+    .from("user_profiles")
+    .select("id")
+    .eq("usn", usn)
+    .maybeSingle();
+
+  if (existingProfile) {
+     throw new Error(`A user account already exists for USN ${usn}`);
+  }
+
+  // 1) Reuse existing candidate if one already exists for this USN
   const { data: existingCandidate, error: existingError } = await adminSupabase
     .from("candidates")
     .select("id, name, usn, email, batch, dept, interview_id, created_at")
@@ -142,9 +144,28 @@ export async function createAdminUser(input: {
     throw existingError;
   }
 
+  // Check if this specific candidate row is already linked (double safety)
+  if (existingCandidate) {
+      const { data: linkedProfile } = await adminSupabase
+        .from("user_profiles")
+        .select("id")
+        .eq("candidate_id", existingCandidate.id)
+        .maybeSingle();
+      
+      if (linkedProfile) {
+          // If the latest candidate is linked, we definitely have a user (though step 0 should have caught it if USN matches)
+          // But maybe USN in profile is empty? (Unlikely given logic). 
+          // Whatever, if linked, we can't reuse it for a NEW user.
+          // We must treat this as "User exists" or create a NEW candidate row?
+          // Since we want to create a user for this student, and they already have one, we error.
+          throw new Error(`This candidate is already linked to a user account.`);
+      }
+  }
+
   let candidate = existingCandidate;
 
-  // If no candidate exists for this USN, create a new base candidate record (not tied to any interview)
+  // If no candidate exists for this USN (or we decided not to reuse? No, always reuse matching USN for now), 
+  // create a new base candidate record
   if (!candidate) {
     const { data: created, error: candidateError } = await adminSupabase
       .from("candidates")
@@ -183,12 +204,19 @@ export async function createAdminUser(input: {
       },
     });
 
-  if (authError || !authData?.user) {
+  if (authError) {
     console.error("Error creating auth user for candidate:", candidate.id, authError);
-    throw authError;
+    // If email exists, throw "User already exists with this email"
+    throw new Error(`Failed to create auth user: ${authError.message}`);
+  }
+
+  if (!authData?.user) {
+      throw new Error("Failed to create auth user: No user data returned.");
   }
 
   // 3) Link user_profile to candidate
+  // Note: The 'handle_new_user' trigger has already inserted a row in user_profiles for this new ID.
+  // We just need to update it.
   const { error: linkError } = await adminSupabase
     .from("user_profiles")
     .update({
@@ -199,7 +227,9 @@ export async function createAdminUser(input: {
 
   if (linkError) {
     console.error("Error linking user_profile for candidate:", candidate.id, linkError);
-    throw linkError;
+    // Try to cleanup? maybe delete the auth user?
+    await adminSupabase.auth.admin.deleteUser(authData.user.id); 
+    throw new Error(`Failed to link candidate profile: ${linkError.message}`);
   }
 
   const auth: CreatedAuthUser = {
@@ -217,10 +247,96 @@ export async function createAdminUser(input: {
     batch: candidate.batch ?? null,
     dept: candidate.dept ?? null,
     interviewId: candidate.interview_id ?? null,
-    interviewTitle: null, // can be filled by caller if needed
+    interviewTitle: null, 
     hasAuthUser: true,
   };
 
   return { user, auth };
+}
+
+export async function deleteAdminUser(usn: string): Promise<void> {
+  if (!adminSupabase) {
+    throw new Error("Admin Supabase client is not configured on the server.");
+  }
+
+  // 1) Get the auth user ID from user_profiles
+  const { data: profile } = await adminSupabase
+    .from("user_profiles")
+    .select("id")
+    .eq("usn", usn)
+    .maybeSingle();
+
+  // 2) If auth user exists, delete it
+  if (profile?.id) {
+    const { error: authError } = await adminSupabase.auth.admin.deleteUser(profile.id);
+    if (authError) {
+      console.error("Error deleting auth user:", authError);
+      throw authError;
+    }
+  }
+
+  // 3) Delete all candidate records for this USN
+  const { error: candidateError } = await adminSupabase
+    .from("candidates")
+    .delete()
+    .eq("usn", usn);
+
+  if (candidateError) {
+    console.error("Error deleting candidates:", candidateError);
+    throw candidateError;
+  }
+}
+
+export async function updateAdminUser(
+  usn: string,
+  updates: {
+    name?: string;
+    email?: string;
+    batch?: string;
+    dept?: string;
+  }
+): Promise<void> {
+  if (!adminSupabase) {
+    throw new Error("Admin Supabase client is not configured on the server.");
+  }
+
+  // Update candidates table (all rows for this USN)
+  const { error: candidateError } = await adminSupabase
+    .from("candidates")
+    .update({
+      ...(updates.name && { name: updates.name }),
+      ...(updates.email && { email: updates.email }),
+      ...(updates.batch && { batch: updates.batch }),
+      ...(updates.dept && { dept: updates.dept }),
+    })
+    .eq("usn", usn);
+
+  if (candidateError) {
+    console.error("Error updating candidates:", candidateError);
+    throw candidateError;
+  }
+
+  // Update auth user if email/name changed
+  const { data: profile } = await adminSupabase
+    .from("user_profiles")
+    .select("id")
+    .eq("usn", usn)
+    .maybeSingle();
+
+  if (profile?.id && (updates.email || updates.name)) {
+    const { error: authError } = await adminSupabase.auth.admin.updateUserById(
+      profile.id,
+      {
+        ...(updates.email && { email: updates.email }),
+        ...(updates.name && { user_metadata: { name: updates.name } }),
+      }
+    );
+    if (authError) {
+      console.error("Error updating auth user:", authError);
+      // We don't necessarily want to fail everything if auth update fails, 
+      // but email update is important.
+      throw authError;
+    }
+  }
 }
 

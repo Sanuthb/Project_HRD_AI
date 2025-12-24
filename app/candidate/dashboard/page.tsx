@@ -177,23 +177,35 @@ function CandidateDashboardContent() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Interview Status</CardTitle>
-                <Badge
-                  variant={
-                    interviewStatus === "Scheduled"
-                      ? "default"
-                      : interviewStatus === "Completed"
-                      ? "secondary"
-                      : "outline"
-                  }
-                >
-                  {interviewStatus === "Scheduled" && (
-                    <Clock className="mr-2 h-3 w-3" />
+                <div className="flex items-center gap-3">
+                  <Badge
+                    variant={
+                      interviewStatus === "Scheduled"
+                        ? "default"
+                        : interviewStatus === "Completed"
+                        ? "secondary"
+                        : "outline"
+                    }
+                  >
+                    {interviewStatus === "Scheduled" && (
+                      <Clock className="mr-2 h-3 w-3" />
+                    )}
+                    {interviewStatus === "Completed" && (
+                      <CheckCircle2 className="mr-2 h-3 w-3" />
+                    )}
+                    {interviewStatus}
+                  </Badge>
+
+                  {(candidate.status === "Promoted" || (candidate.resume_score !== null && candidate.resume_score !== undefined && candidate.resume_score >= 75)) && (
+                    <Button 
+                      size="sm" 
+                      onClick={() => router.push(`/candidate/interview/${candidate.interview_id}`)}
+                      className="bg-blue-600 hover:bg-blue-700 h-8"
+                    >
+                      {candidate.status === "Not Promoted" ? "Resume Interview" : "Take Interview Sekarang"}
+                    </Button>
                   )}
-                  {interviewStatus === "Completed" && (
-                    <CheckCircle2 className="mr-2 h-3 w-3" />
-                  )}
-                  {interviewStatus}
-                </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
