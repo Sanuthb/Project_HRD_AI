@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Clock, FileText, CheckCircle2, XCircle, LogOut } from "lucide-react";
+import { Clock, FileText, CheckCircle2, XCircle, LogOut, Upload } from "lucide-react";
 import { Candidate, Interview } from "@/lib/types";
 import { getCandidateByUserId } from "@/lib/services/candidates";
 import { getInterviewById } from "@/lib/services/interviews";
@@ -196,13 +196,40 @@ function CandidateDashboardContent() {
                     {interviewStatus}
                   </Badge>
 
-                  {(candidate.status === "Promoted" || (candidate.resume_score !== null && candidate.resume_score !== undefined && candidate.resume_score >= 75)) && (
+                  {/* 
+                      Logic:
+                      - If Promoted/Passed (>75) OR status="Promoted": Show "Take Interview" -> /interview/[id]
+                      - If Not eligible (<75) AND NOT Promoted: 
+                        - If they have a resume score (attempted once), show "Resume Verification Failed" (Disabled button)
+                        - If no score, show "Upload Resume"
+                  */}
+                  {(candidate.status === "Promoted" || candidate.manually_promoted || (candidate.resume_score !== null && candidate.resume_score !== undefined && candidate.resume_score >= 75)) ? (
                     <Button 
                       size="sm" 
-                      onClick={() => router.push(`/candidate/interview/${candidate.interview_id}`)}
-                      className="bg-blue-600 hover:bg-blue-700 h-8"
+                      onClick={() => router.push(`/interview/${candidate.interview_id}`)}
+                      className="bg-green-600 hover:bg-green-700 h-8"
                     >
-                      {candidate.status === "Not Promoted" ? "Resume Interview" : "Take Interview Sekarang"}
+                      Take Interview Now
+                    </Button>
+                  ) : (
+                    /* Not Eligible Case */
+                    <Button 
+                      size="sm" 
+                      onClick={() => router.push(`/candidate/resume-upload`)}
+                      disabled={candidate.resume_score !== null && candidate.resume_score !== undefined} // Disable if they already uploaded and failed (unless they can re-upload, but user said "cannot upload resume again")
+                      className={candidate.resume_score !== null ? "bg-red-600 hover:bg-red-700 h-8" : "bg-blue-600 hover:bg-blue-700 h-8"}
+                    >
+                      {candidate.resume_score !== null ? (
+                         <>
+                           <XCircle className="mr-2 h-3 w-3" />
+                           Verification Failed
+                         </>
+                      ) : (
+                         <>
+                           <Upload className="mr-2 h-3 w-3" />
+                           Upload Resume
+                         </>
+                      )}
                     </Button>
                   )}
                 </div>

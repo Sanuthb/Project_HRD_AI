@@ -84,13 +84,16 @@ function ResumeUploadContent() {
         experienceSuitabilityScore: number;
         overallScore: number;
         overallRating: string;
+        resumeText?: string;
       };
 
       const overallScore = analysis.overallScore ?? 0;
       const isEligible = overallScore >= 75;
 
+      const resumeText = analysis.resumeText;
+
       // Update candidate record
-      await updateCandidateResume(candidateId, resumeUrl, overallScore);
+      await updateCandidateResume(candidateId, resumeUrl, overallScore, resumeText, analysis);
 
       setScore(overallScore);
       setSkillsScore(analysis.skillsMatchScore ?? null);
@@ -114,22 +117,28 @@ function ResumeUploadContent() {
       if (!candidateId) return;
       try {
         const data = await getCandidateById(candidateId);
+        
+        // If we found the candidate, set the interview ID
         if (data?.interview_id) {
           setInterviewId(data.interview_id);
+        }
+
+        // Optional: If they already have a passing score, we could pre-fill the state
+        if (data?.resume_score !== undefined) {
+             // We can decide if we want to show the previous score or force re-upload.
+             // For now, we just ensure interviewId is set so the button works if they upload again.
         }
       } catch (err) {
         console.error("Error fetching candidate data:", err);
       }
     };
 
-    if (uploaded) {
-      fetchCandidateData();
-    }
-  }, [candidateId, uploaded]);
+    fetchCandidateData();
+  }, [candidateId]);
 
   const handleTakeInterview = () => {
     if (interviewId) {
-      router.push(`/candidate/interview/${interviewId}`);
+      router.push(`/interview/${interviewId}`);
     } else {
       toast.error("Interview ID not found. Please contact administrator.");
     }

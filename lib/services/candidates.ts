@@ -248,6 +248,8 @@ export async function getCandidatesByInterview(interviewId: string): Promise<Can
     email: c.email,
     resume_score: c.resume_score,
     resume_url: c.resume_url,
+    resume_text: c.resume_text,
+    resume_analysis: c.resume_analysis,
     status: c.status,
     interview_id: c.interview_id,
     resume_status: c.resume_status,
@@ -262,7 +264,9 @@ export async function getCandidatesByInterview(interviewId: string): Promise<Can
 export async function updateCandidateResume(
   candidateId: string,
   resumeUrl: string,
-  resumeScore: number
+  resumeScore: number,
+  resumeText: string | null = null,
+  resumeAnalysis: any = null
 ): Promise<void> {
   // 1. Get the USN of the candidate to ensure we update ALL active applications for this student
   const { data: candidate, error: fetchError } = await supabase
@@ -283,6 +287,8 @@ export async function updateCandidateResume(
     .update({
       resume_url: resumeUrl,
       resume_score: resumeScore,
+      resume_text: resumeText,
+      resume_analysis: resumeAnalysis,
       // If score is high, promote? CAREFUL: Different interviews might have different thresholds.
       // For now, let's keep the simple logic: if > 75, promote. 
       // ideally validation should be per-interview, but for this shared update, we apply one rule.
@@ -318,7 +324,7 @@ export async function markMalpractice(candidateId: string): Promise<void> {
     .update({ 
       malpractice: true,
       status: 'Not Promoted',
-      interview_status: 'Completed'
+      interview_status: 'Locked'
     })
     .eq('id', candidateId);
 
@@ -352,6 +358,8 @@ export async function getCandidateById(id: string): Promise<Candidate | null> {
       email: data.email,
       resume_score: data.resume_score,
       resume_url: data.resume_url,
+      resume_text: data.resume_text,
+      resume_analysis: data.resume_analysis,
       status: data.status,
       interview_id: data.interview_id,
       resume_status: data.resume_status,
@@ -395,6 +403,7 @@ export async function getCandidateByUSN(usn: string): Promise<Candidate | null> 
       email: candidate.email,
       resume_score: candidate.resume_score,
       resume_url: candidate.resume_url,
+      resume_text: candidate.resume_text,
       status: candidate.status,
       resume_status: candidate.resume_status,
       interview_status: candidate.interview_status,
@@ -442,6 +451,7 @@ export async function getCandidateByUserId(userId: string): Promise<Candidate | 
             email: candidate.email,
             resume_score: candidate.resume_score,
             resume_url: candidate.resume_url,
+            resume_text: candidate.resume_text,
             status: candidate.status,
             interview_id: candidate.interview_id,
             resume_status: candidate.resume_status,

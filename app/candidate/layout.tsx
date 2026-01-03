@@ -11,11 +11,6 @@ const candidateLinks = [
     label: "Dashboard",
     icon: <LayoutDashboard className="h-4 w-4" />,
   },
-  {
-    href: "/candidate/resume-upload",
-    label: "Upload Resume",
-    icon: <Upload className="h-4 w-4" />,
-  },
 ];
 
 export default function CandidateLayout({

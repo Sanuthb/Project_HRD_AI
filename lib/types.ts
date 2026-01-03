@@ -24,6 +24,8 @@ export interface Candidate {
   dept?: string;
   resume_score?: number;
   resume_url?: string;
+  resume_text?: string | null;
+  resume_analysis?: any;
   status: "Promoted" | "Not Promoted" | "Pending";
   // New Enhanced Fields
   resume_status: ResumeStatus;

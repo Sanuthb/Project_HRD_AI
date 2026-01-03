@@ -82,62 +82,149 @@ export function ResumeViewer({ candidate, open, onOpenChange }: ResumeViewerProp
           <TabsContent value="ai-analysis" className="flex-1 min-h-0 mt-2">
             <ScrollArea className="h-full">
               <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 border rounded-lg">
-                    <h3 className="font-semibold mb-2">Resume Score</h3>
-                    <div className="text-3xl font-bold text-primary">
-                      {candidate.resume_score || 0}/100
-                    </div>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <h3 className="font-semibold mb-2">Interview Status</h3>
-                     <span className="capitalize">{candidate.interview_status}</span>
-                  </div>
-                </div>
                 
-                {reportData ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="p-4 border rounded-lg bg-blue-50/50">
-                        <h4 className="text-xs font-semibold text-blue-700 uppercase mb-1">Communication</h4>
-                        <div className="text-2xl font-bold">{reportData.communication_score}/100</div>
+                {/* Resume Analysis Section */}
+                {candidate.resume_analysis ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Overall Score */}
+                      <div className="p-4 border rounded-lg bg-primary/5">
+                        <h3 className="font-semibold mb-2">Resume Match Score</h3>
+                        <div className="flex items-end gap-2">
+                          <span className="text-4xl font-bold text-primary">
+                            {candidate.resume_analysis.overallScore || candidate.resume_score || 0}%
+                          </span>
+                          <span className="text-sm font-medium text-muted-foreground mb-1">
+                             {candidate.resume_analysis.overallRating}
+                          </span>
+                        </div>
                       </div>
-                      <div className="p-4 border rounded-lg bg-green-50/50">
-                        <h4 className="text-xs font-semibold text-green-700 uppercase mb-1">Skills</h4>
-                        <div className="text-2xl font-bold">{reportData.skills_score}/100</div>
-                      </div>
-                      <div className="p-4 border rounded-lg bg-purple-50/50">
-                        <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Knowledge</h4>
-                        <div className="text-2xl font-bold">{reportData.knowledge_score}/100</div>
+
+                      {/* Detailed Scores */}
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Skills Match</span>
+                            <span className="font-medium">{candidate.resume_analysis.skillsMatchScore}%</span>
+                          </div>
+                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-500" 
+                              style={{ width: `${candidate.resume_analysis.skillsMatchScore}%` }} 
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Project Relevance</span>
+                            <span className="font-medium">{candidate.resume_analysis.projectRelevanceScore}%</span>
+                          </div>
+                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-purple-500" 
+                              style={{ width: `${candidate.resume_analysis.projectRelevanceScore}%` }} 
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>Experience Suitability</span>
+                            <span className="font-medium">{candidate.resume_analysis.experienceSuitabilityScore}%</span>
+                          </div>
+                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-green-500" 
+                              style={{ width: `${candidate.resume_analysis.experienceSuitabilityScore}%` }} 
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-semibold mb-2">Strengths</h3>
-                      <ul className="list-disc pl-5 text-sm space-y-1">
-                        {reportData.report?.strengths?.map((s: string, i: number) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="p-4 border rounded-lg">
-                      <h3 className="font-semibold mb-2">Areas for Improvement</h3>
-                      <ul className="list-disc pl-5 text-sm space-y-1">
-                        {reportData.report?.weaknesses?.map((w: string, i: number) => (
-                          <li key={i}>{w}</li>
-                        ))}
-                      </ul>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 border rounded-lg bg-green-50/50 dark:bg-green-900/20">
+                        <h3 className="font-semibold mb-2 text-green-700 dark:text-green-400">Strengths</h3>
+                        <ul className="list-disc pl-5 text-sm space-y-1">
+                          {candidate.resume_analysis.strengths?.length > 0 ? (
+                            candidate.resume_analysis.strengths.map((s: string, i: number) => (
+                              <li key={i}>{s}</li>
+                            ))
+                          ) : (
+                            <li className="text-muted-foreground">No strengths listed.</li>
+                          )}
+                        </ul>
+                      </div>
+                      
+                      <div className="p-4 border rounded-lg bg-red-50/50 dark:bg-red-900/20">
+                        <h3 className="font-semibold mb-2 text-red-700 dark:text-red-400">Weaknesses</h3>
+                        <ul className="list-disc pl-5 text-sm space-y-1">
+                          {candidate.resume_analysis.weaknesses?.length > 0 ? (
+                            candidate.resume_analysis.weaknesses.map((w: string, i: number) => (
+                              <li key={i}>{w}</li>
+                            ))
+                          ) : (
+                            <li className="text-muted-foreground">No weaknesses listed.</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-muted p-4 rounded-lg">
-                    <h3 className="font-semibold mb-2">Interview Analysis</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {loadingReport ? "Loading report..." : "Interview analysis will appear here after completion."}
+                  <div className="p-6 border rounded-lg bg-muted text-center text-muted-foreground">
+                    <p>No detailed resume analysis available.</p>
+                    <p className="text-xs mt-1">
+                      (Ask the candidate to re-upload their resume to generate this analysis)
                     </p>
                   </div>
                 )}
+
+                {/* Separator for Interview Results */}
+                <div className="border-t my-4 py-4">
+                   <h3 className="text-lg font-bold mb-4">Post-Interview Analysis</h3>
+                    {reportData ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="p-4 border rounded-lg bg-blue-50/50">
+                            <h4 className="text-xs font-semibold text-blue-700 uppercase mb-1">Communication</h4>
+                            <div className="text-2xl font-bold">{reportData.communication_score}/100</div>
+                          </div>
+                          <div className="p-4 border rounded-lg bg-green-50/50">
+                            <h4 className="text-xs font-semibold text-green-700 uppercase mb-1">Skills</h4>
+                            <div className="text-2xl font-bold">{reportData.skills_score}/100</div>
+                          </div>
+                          <div className="p-4 border rounded-lg bg-purple-50/50">
+                            <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Knowledge</h4>
+                            <div className="text-2xl font-bold">{reportData.knowledge_score}/100</div>
+                          </div>
+                        </div>
+
+                        <div className="p-4 border rounded-lg">
+                          <h3 className="font-semibold mb-2">Interview Strengths</h3>
+                          <ul className="list-disc pl-5 text-sm space-y-1">
+                            {reportData.report?.strengths?.map((s: string, i: number) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="p-4 border rounded-lg">
+                          <h3 className="font-semibold mb-2">Areas for Improvement</h3>
+                          <ul className="list-disc pl-5 text-sm space-y-1">
+                            {reportData.report?.weaknesses?.map((w: string, i: number) => (
+                              <li key={i}>{w}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-muted p-4 rounded-lg text-center">
+                        <p className="text-sm text-muted-foreground">
+                          {loadingReport ? "Loading interview report..." : "Interview analysis will appear here after completion."}
+                        </p>
+                      </div>
+                    )}
+                </div>
+
               </div>
             </ScrollArea>
           </TabsContent>

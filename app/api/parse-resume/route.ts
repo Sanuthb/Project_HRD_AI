@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
         overallRating: parsed.overallRating ?? "Average",
         strengths: parsed.strengths ?? [],
         weaknesses: parsed.weaknesses ?? [],
+        resumeText, // Return the extracted text so frontend can save it
       },
     });
   } catch (error: any) {

@@ -513,8 +513,6 @@ export default function CreateInterviewPage() {
                   id="duration"
                   type="number"
                   placeholder="e.g., 30"
-                  min="15"
-                  step="15"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                 />
