@@ -50,7 +50,7 @@ export function Sidebar({ links, title }: SidebarProps) {
           links={links}
           title={title}
           pathname={pathname}
-          onLinkClick={() => {}}
+          onLinkClick={() => { }}
         />
       </aside>
     </>
@@ -75,7 +75,10 @@ function SidebarContent({
       </div>
       <nav className="flex-1 space-y-1 p-4">
         {links.map((link) => {
-          const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+          const isActive =
+            pathname === link.href ||
+            (link.href !== "/admin" && pathname.startsWith(link.href + "/"));
+
           return (
             <Link
               key={link.href}

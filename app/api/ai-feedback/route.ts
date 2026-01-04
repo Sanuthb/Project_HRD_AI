@@ -2,10 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateFinalReport } from "@/lib/services/ai-report";
 import { getCandidateById } from "@/lib/services/candidates";
 import { getInterviewById } from "@/lib/services/interviews";
-import { supabase } from "@/lib/supabase/client";
+import { adminSupabase } from "@/lib/supabase/admin";
 
 export async function POST(req: NextRequest) {
   try {
+    // Debugging checks
+    if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+      console.warn("Warning: NEXT_PUBLIC_GEMINI_API_KEY is missing in server environment");
+    }
+
+    if (!adminSupabase) {
+      console.error("Supabase admin client (adminSupabase) is null. serviceRoleKey might be missing.");
+      throw new Error("Supabase admin client is not configured");
+    }
+
     const { conversation, candidateId, interviewId } = await req.json();
 
     if (!conversation || !candidateId || !interviewId) {
@@ -17,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const [candidate, interview] = await Promise.all([
       getCandidateById(candidateId),
-      getInterviewById(interviewId),
+      getInterviewById(String(interviewId)), // Ensure string
     ]);
 
     if (!candidate || !interview) {
@@ -28,26 +38,25 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate the report using the existing service
-    // We assume the service is updated to return communication, skills, knowledge scores
     const report = await generateFinalReport(
       candidate,
-      interview as any,
-      "Resume text not available in this request", // We might want to fetch this properly
+      interview,
+      candidate.resume_text || "Resume text not available",
       JSON.stringify(conversation)
     );
 
     // Save to interview_results
-    const { data: resultData, error: resultError } = await supabase
+    const { data: resultData, error: resultError } = await adminSupabase
       .from("interview_results")
       .insert([
         {
           candidate_id: candidateId,
-          interview_id: interviewId,
+          interview_id: String(interviewId),
           transcript: conversation,
           report: report,
-          communication_score: (report as any).communicationScore || 0,
-          skills_score: (report as any).skillsScore || 0,
-          knowledge_score: (report as any).knowledgeScore || 0,
+          communication_score: report.communicationScore || 0,
+          skills_score: report.skillsScore || 0,
+          knowledge_score: report.knowledgeScore || 0,
           summary: report.summary,
         },
       ])
@@ -57,7 +66,7 @@ export async function POST(req: NextRequest) {
     if (resultError) throw resultError;
 
     // Update candidate interview status
-    await supabase
+    await adminSupabase
       .from("candidates")
       .update({ interview_status: "Completed" })
       .eq("id", candidateId);

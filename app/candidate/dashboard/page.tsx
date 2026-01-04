@@ -6,7 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Clock, FileText, CheckCircle2, XCircle, LogOut, Upload } from "lucide-react";
+import {
+  Clock,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  LogOut,
+  Upload,
+} from "lucide-react";
 import { Candidate, Interview } from "@/lib/types";
 import { getCandidateByUserId } from "@/lib/services/candidates";
 import { getInterviewById } from "@/lib/services/interviews";
@@ -45,7 +52,9 @@ function CandidateDashboardContent() {
         const candidateData = await getCandidateByUserId(user.id);
 
         if (!candidateData) {
-          setError("No interview assigned to this account. Please contact the administrator.");
+          setError(
+            "No interview assigned to this account. Please contact the administrator."
+          );
           setIsLoading(false);
           return;
         }
@@ -54,7 +63,9 @@ function CandidateDashboardContent() {
 
         // Fetch interview data
         if (candidateData.interview_id) {
-          const interviewData = await getInterviewById(candidateData.interview_id);
+          const interviewData = await getInterviewById(
+            candidateData.interview_id
+          );
 
           if (!interviewData) {
             setError("Interview not found for this candidate.");
@@ -84,13 +95,15 @@ function CandidateDashboardContent() {
       // In production, you'd have an actual interview_date field
       const interviewDate = new Date(interview.created_at);
       interviewDate.setDate(interviewDate.getDate() + 7); // Add 7 days
-      
+
       const now = new Date();
       const diff = interviewDate.getTime() - now.getTime();
 
       if (diff > 0) {
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const hours = Math.floor(
+          (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+        );
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
@@ -111,13 +124,15 @@ function CandidateDashboardContent() {
     router.push("/login");
   };
 
-  const interviewStatus = candidate?.status === "Promoted" 
-    ? "Completed" 
-    : candidate?.status === "Not Promoted" 
-    ? "Completed" 
-    : candidate?.resume_score !== null && candidate?.resume_score !== undefined
-    ? "Scheduled"
-    : "Pending";
+  const interviewStatus =
+    candidate?.status === "Promoted"
+      ? "Completed"
+      : candidate?.status === "Not Promoted"
+      ? "Completed"
+      : candidate?.resume_score !== null &&
+        candidate?.resume_score !== undefined
+      ? "Scheduled"
+      : "Pending";
 
   if (isLoading) {
     return (
@@ -136,13 +151,11 @@ function CandidateDashboardContent() {
           <div>
             <h1 className="text-3xl font-bold">Interview Dashboard</h1>
             <p className="text-muted-foreground">
-              Welcome, {candidate?.name || user?.email} ({candidate?.usn || "N/A"})
+              Welcome, {candidate?.name || user?.email} (
+              {candidate?.usn || "N/A"})
             </p>
           </div>
-          <Button
-            variant="outline"
-            onClick={handleSignOut}
-          >
+          <Button variant="outline" onClick={handleSignOut}>
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out
           </Button>
@@ -165,7 +178,8 @@ function CandidateDashboardContent() {
         <Alert>
           <AlertTitle>No Interview Found</AlertTitle>
           <AlertDescription>
-            No interview has been assigned to you yet. Please contact the administrator.
+            No interview has been assigned to you yet. Please contact the
+            administrator.
           </AlertDescription>
         </Alert>
       )}
@@ -203,32 +217,45 @@ function CandidateDashboardContent() {
                         - If they have a resume score (attempted once), show "Resume Verification Failed" (Disabled button)
                         - If no score, show "Upload Resume"
                   */}
-                  {(candidate.status === "Promoted" || candidate.manually_promoted || (candidate.resume_score !== null && candidate.resume_score !== undefined && candidate.resume_score >= 75)) ? (
-                    <Button 
-                      size="sm" 
-                      onClick={() => router.push(`/interview/${candidate.interview_id}`)}
+                  {candidate.status === "Promoted" ||
+                  candidate.manually_promoted ||
+                  (candidate.resume_score !== null &&
+                    candidate.resume_score !== undefined &&
+                    candidate.resume_score >= 75) ? (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        router.push(`/interview/${candidate.interview_id}`)
+                      }
                       className="bg-green-600 hover:bg-green-700 h-8"
                     >
                       Take Interview Now
                     </Button>
                   ) : (
                     /* Not Eligible Case */
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => router.push(`/candidate/resume-upload`)}
-                      disabled={candidate.resume_score !== null && candidate.resume_score !== undefined} // Disable if they already uploaded and failed (unless they can re-upload, but user said "cannot upload resume again")
-                      className={candidate.resume_score !== null ? "bg-red-600 hover:bg-red-700 h-8" : "bg-blue-600 hover:bg-blue-700 h-8"}
+                      disabled={
+                        candidate.resume_score !== null &&
+                        candidate.resume_score !== undefined
+                      } // Disable if they already uploaded and failed (unless they can re-upload, but user said "cannot upload resume again")
+                      className={
+                        candidate.resume_score !== null
+                          ? "bg-red-600 hover:bg-red-700 h-8"
+                          : "bg-blue-600 hover:bg-blue-700 h-8"
+                      }
                     >
                       {candidate.resume_score !== null ? (
-                         <>
-                           <XCircle className="mr-2 h-3 w-3" />
-                           Verification Failed
-                         </>
+                        <>
+                          <XCircle className="mr-2 h-3 w-3" />
+                          Verification Failed
+                        </>
                       ) : (
-                         <>
-                           <Upload className="mr-2 h-3 w-3" />
-                           Upload Resume
-                         </>
+                        <>
+                          <Upload className="mr-2 h-3 w-3" />
+                          Upload Resume
+                        </>
                       )}
                     </Button>
                   )}
@@ -265,14 +292,15 @@ function CandidateDashboardContent() {
                     <p className="text-lg">{interview.duration} minutes</p>
                   </div>
                 )}
-                {candidate.resume_score !== null && candidate.resume_score !== undefined && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">
-                      Resume Score
-                    </p>
-                    <p className="text-lg">{candidate.resume_score}%</p>
-                  </div>
-                )}
+                {candidate.resume_score !== null &&
+                  candidate.resume_score !== undefined && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">
+                        Resume Score
+                      </p>
+                      <p className="text-lg">{candidate.resume_score}%</p>
+                    </div>
+                  )}
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-1">
                     Your Status

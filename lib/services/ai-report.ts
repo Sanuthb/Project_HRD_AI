@@ -22,7 +22,7 @@ export async function generateFinalReport(
   interviewTranscript: string
 ): Promise<AIReportData> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Use stable gemini-1.5-flash
+    const model = genAI.getGenerativeModel({ model: "gemini-robotics-er-1.5-preview" }); // Use stable gemini-1.5-flash
 
     const prompt = `
       You are an expert HR Interviewer. Generate a final hiring report for a candidate based on their interview for the following position.
@@ -62,6 +62,7 @@ export async function generateFinalReport(
     return JSON.parse(text) as AIReportData;
   } catch (error) {
     console.error("Error generating AI report:", error);
-    throw new Error("Failed to generate report");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to generate report: ${errorMessage}`);
   }
 }
