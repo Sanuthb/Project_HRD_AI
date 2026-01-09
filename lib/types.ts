@@ -34,8 +34,25 @@ export interface Candidate {
   override_by_admin: boolean;
   manual_interview_deadline?: string;
   malpractice?: boolean;
-  
+  malpractice_score?: number;
+  malpractice_details?: string;
+
   interview_id?: string;
+  created_at?: string;
+  // AI Proctoring
+  risk_score?: number;
+  risk_level?: RiskLevel;
+  proctoring_summary?: any;
+}
+
+export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export interface ProctoringEvent {
+  id?: string;
+  interview_id: string;
+  candidate_id: string;
+  event_type: "TAB_SWITCH" | "FULLSCREEN_EXIT" | "FACE_MISSING" | "MULTIPLE_FACES" | "COPY_PASTE" | "MIC_MUTED" | "CAM_OFF";
+  details?: any;
   created_at?: string;
 }
 

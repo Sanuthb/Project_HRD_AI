@@ -57,7 +57,7 @@ export async function createCandidatesBulk(
   const { data: registeredProfiles } = await client
     .from('user_profiles')
     .select('usn');
-  
+
   const registeredUSNs = new Set((registeredProfiles || []).map(p => p.usn));
 
   for (const candidate of candidates) {
@@ -118,7 +118,7 @@ export async function createCandidatesBulk(
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         if (globalExisting) {
           if (!finalBatch) finalBatch = globalExisting.batch;
           if (!finalDept) finalDept = globalExisting.dept;
@@ -161,7 +161,7 @@ export async function searchRegisteredUsers(query: string, interviewId: string) 
     .from('candidates')
     .select('usn')
     .eq('interview_id', interviewId);
-  
+
   const existingUSNs = new Set((existingCandidates || []).map(c => c.usn));
 
   // 2) Get registered users matching query
@@ -169,7 +169,7 @@ export async function searchRegisteredUsers(query: string, interviewId: string) 
   // Let's assume we want to search in users we already know about.
   // Actually, listAdminUsers in admin-users.ts does exactly what we want (unique users).
   // But we need to use 'supabase' client here.
-  
+
   // We'll search in candidates table for unique USNs that have a profile.
   const { data: candidatesWithProfiles } = await supabase
     .from('candidates')
@@ -257,6 +257,13 @@ export async function getCandidatesByInterview(interviewId: string): Promise<Can
     manually_promoted: c.manually_promoted,
     override_by_admin: c.override_by_admin,
     manual_interview_deadline: c.manual_interview_deadline,
+    malpractice: c.malpractice,
+    malpractice_score: c.malpractice_score,
+    malpractice_details: c.malpractice_details,
+    // Proctoring Logic
+    risk_score: c.risk_score,
+    risk_level: c.risk_level,
+    proctoring_summary: c.proctoring_summary,
     created_at: c.created_at,
   }));
 }
@@ -276,8 +283,8 @@ export async function updateCandidateResume(
     .single();
 
   if (fetchError || !candidate) {
-      console.error('Error fetching candidate for resume update:', fetchError);
-      throw fetchError || new Error("Candidate not found");
+    console.error('Error fetching candidate for resume update:', fetchError);
+    throw fetchError || new Error("Candidate not found");
   }
 
   // 2. Update ALL candidate records with this USN (so all interview dashboards see the new resume)
@@ -321,7 +328,7 @@ export async function updateCandidateStatus(
 export async function markMalpractice(candidateId: string): Promise<void> {
   const { error } = await supabase
     .from('candidates')
-    .update({ 
+    .update({
       malpractice: true,
       status: 'Not Promoted',
       interview_status: 'Locked'

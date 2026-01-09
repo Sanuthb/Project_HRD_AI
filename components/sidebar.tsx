@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ export function Sidebar({ links, title }: SidebarProps) {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:bg-card">
+      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-white/10 lg:bg-card/30 lg:backdrop-blur-xl z-20">
         <SidebarContent
           links={links}
           title={title}
@@ -97,6 +98,12 @@ function SidebarContent({
           );
         })}
       </nav>
+      <div className="p-4 border-t border-white/10">
+        <div className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-lg">
+          <span className="text-sm font-medium text-muted-foreground">Theme</span>
+          <ModeToggle />
+        </div>
+      </div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { getInterviewById } from "@/lib/services/interviews";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { toast } from "sonner";
+import { adminSupabase } from "@/lib/supabase/admin";
 
 function CandidateDashboardContent() {
   const router = useRouter();
@@ -34,6 +35,23 @@ function CandidateDashboardContent() {
     minutes: 0,
     seconds: 0,
   });
+
+  // useEffect(() => {
+  //   const fetchData = async () => {
+  //     if (!adminSupabase) {
+  //       console.error("Admin Supabase client is not available");
+  //       return;
+  //     }
+
+  //     const { data: resultData, error: resultError } = await adminSupabase
+  //       .from("interview_results")
+  //       .select()
+  //       .single();
+
+  //     console.log(resultData);
+  //   };
+  //   fetchData();
+  // }, []);
 
   // Fetch candidate and interview data
   useEffect(() => {

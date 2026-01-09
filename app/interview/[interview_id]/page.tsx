@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import AlertConfirmation from "@/components/AlertConfirmation";
 import { InterviewContext } from "@/lib/contexts/InterviewContext";
+import { ProctoringManager } from "@/components/interview/ProctoringManager";
 
 export default function Page() {
   const { user } = useAuth();
@@ -62,6 +63,8 @@ export default function Page() {
   // resumeText state
   const [resumeText, setResumeText] = useState<string>("");
 
+  const { candidateId } = useAuth();
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id || !interview_id) return;
@@ -80,6 +83,18 @@ export default function Page() {
         console.log("Interview data:", intData);
 
         if (candData) {
+          // Time Expiry Check
+          const createdAt = new Date(candData.created_at || Date.now());
+          const deadline = candData.manual_interview_deadline
+            ? new Date(candData.manual_interview_deadline)
+            : new Date(createdAt.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+
+          if (Date.now() > deadline.getTime()) {
+            toast.error("This interview link has expired (24-hour limit).");
+            router.push("/candidate/dashboard");
+            return;
+          }
+
           // Check for blocked/locked/malpractice status
           if (
             candData.interview_status === "Locked" ||
@@ -176,12 +191,12 @@ export default function Page() {
     // Dynamic Resume Info: Use text if available, fallback to URL
     const resumeContext = resumeText
       ? `Candidate Resume Content:\n${resumeText.substring(
-        0,
-        5000
-      )}... (truncated)`
+          0,
+          5000
+        )}... (truncated)`
       : candidate?.resume_url
-        ? `Available at ${candidate.resume_url}.`
-        : "No resume provided.";
+      ? `Available at ${candidate.resume_url}.`
+      : "No resume provided.";
 
     const assistantOptions = {
       name: "AI Recruiter",
@@ -206,23 +221,27 @@ export default function Page() {
                           Your job is to ask candidates relevant interview questions based on their resume and the job description provided.
 
                           **Context:**
-                          - Job Description: ${interview?.jd_text ||
-              interview?.jd_name ||
-              interviewdata?.jobposition
-              }
-                          - Candidate Name: ${candidate?.name || interviewdata?.Username
-              }
+                          - Job Description: ${
+                            interview?.jd_text ||
+                            interview?.jd_name ||
+                            interviewdata?.jobposition
+                          }
+                          - Candidate Name: ${
+                            candidate?.name || interviewdata?.Username
+                          }
                           - Candidate Resume Info: ${resumeContext}
-                          - Interview Duration: ${interview?.duration || 15
-              } minutes
+                          - Interview Duration: ${
+                            interview?.duration || 15
+                          } minutes
 
                           **Instructions:**
                           1. Begin with a friendly, professional introduction.
                           2. Analyze the Job Description and the Candidate's Resume (if available).
                           3. Generate strictly relevant interview questions.
                           4. Ask one question at a time and wait for the candidate's response.
-                          5. Manage the interview time efficiently. You have exactly ${interview?.duration || 15
-              } minutes.
+                          5. Manage the interview time efficiently. You have exactly ${
+                            interview?.duration || 15
+                          } minutes.
                              - Pace your questions to cover key areas within this timeframe.
                              - If time is running out, wrap up with a final question or a polite closing.
                              - Do not exceed the allocated duration significantly.
@@ -238,6 +257,13 @@ export default function Page() {
           },
         ],
       },
+      // Stability & Timeout Settings
+      maxDurationSeconds: (interview?.duration || 15) * 60 + 300, // Duration + 5 min buffer
+      silenceTimeoutSeconds: 60, // Wait 60s before ending due to silence
+      // transportConfigurations: {
+      //   timeout: 60, // Increase connection timeout
+      // },
+      firstMessageMode: "assistant-speaks-first",
     };
 
     console.log("assistantOptions=", assistantOptions);
@@ -250,8 +276,9 @@ export default function Page() {
       await vapi.start(assistantOptions as any);
     } catch (error) {
       const err = error as { message?: string };
-      const msg = `Could not start the interview: ${err.message || "Unknown error"
-        }`;
+      const msg = `Could not start the interview: ${
+        err.message || "Unknown error"
+      }`;
       toast.error(msg);
       setCallError(msg);
       setInterviewStarted(false);
@@ -262,7 +289,9 @@ export default function Page() {
   const candidateRef = useRef<Candidate | null>(null);
   const interviewStartedRef = useRef<boolean>(false);
   // Ref to hold the latest GenerateFeedback function to avoid stale closures in event listeners
-  const generateFeedbackRef = useRef<((data: any) => Promise<void>) | null>(null);
+  const generateFeedbackRef = useRef<((data: any) => Promise<void>) | null>(
+    null
+  );
 
   useEffect(() => {
     candidateRef.current = candidate;
@@ -311,9 +340,12 @@ export default function Page() {
       }
 
       // If the call never actually started (e.g. immediate failure), do NOT try to save conversation
+      // If the call never actually started but was manually ended, we still want to generate feedback (skip/abort scenario)
       if (!hasCallStartedRef.current) {
-        console.log("Call ended before starting. Skipping feedback generation.");
-        return;
+        console.log(
+          "Call ended before starting. Proceeding to feedback generation..."
+        );
+        // Don't return, proceed to save conversation (which will use fallback)
       }
 
       setTimeout(() => {
@@ -335,14 +367,11 @@ export default function Page() {
         if (conversationBuffer.current) {
           runGenerate(conversationBuffer.current);
         } else {
-          console.warn("Conversation not yet populated, retrying...");
-          setTimeout(() => {
-            if (conversationBuffer.current) {
-              runGenerate(conversationBuffer.current);
-            } else {
-              toast.error("Failed to retrieve conversation history.");
-            }
-          }, 1500);
+          // If buffer is still empty, proceed with empty array (will trigger fallback in generateFeedback)
+          console.warn(
+            "Conversation empty, using fallback for immediate exit."
+          );
+          runGenerate([]);
         }
       }, 1000);
     };
@@ -354,6 +383,12 @@ export default function Page() {
     };
 
     const handleError = (error: any) => {
+      // Ignore "Meeting has ended" errors as they are benign during stop sequence
+      if (
+        error?.message === "Meeting has ended" ||
+        error === "Meeting has ended"
+      )
+        return;
       console.error("Vapi error:", error);
 
       // Deeply extract error message
@@ -363,17 +398,26 @@ export default function Page() {
         error?.error?.message ||
         error?.errorMsg ||
         error?.message ||
-        (typeof error === 'string' ? error : "") ||
+        (typeof error === "string" ? error : "") ||
         "An unknown error occurred";
 
       const lowerMsg = String(rawMsg).toLowerCase();
+
+      // Detection of specific "ejection" error
+      if (lowerMsg.includes("ejection") || lowerMsg.includes("kick")) {
+        console.warn(
+          "Vapi Ejection Detected. This usually means a connection timeout or room expiry."
+        );
+        // We can treat this as a call end if we want, or just let the user retry
+      }
 
       // If Vapi says the meeting has ended, treat it as a graceful end
       if (lowerMsg.includes("meeting has ended")) {
         if (hasCallStartedRef.current) {
           handleCallEnd();
         } else {
-          const msg = "Interview connection failed (Meeting ended immediately).";
+          const msg =
+            "Interview connection failed (Meeting ended immediately).";
           setCallError(msg);
           toast.error(msg);
           setInterviewStarted(false);
@@ -408,43 +452,31 @@ export default function Page() {
     };
   }, []); // Run only once on mount
 
-  // Full-screen Malpractice Detection (Separate Effect)
-  useEffect(() => {
-    const handleFullScreenChange = () => {
-      if (
-        !document.fullscreenElement &&
-        interviewStarted &&
-        !hasEndedRef.current
-      ) {
-        // If interview is active and they exit full screen
-        handleStopInterview();
-        if (candidate) { // Use state directly here as this effect depends on it (or use ref if prefer stable)
-          markMalpractice(candidate.id);
-          toast.error(
-            "Malpractice Detected: You exited full-screen mode. Interview ended."
-          );
-          router.push("/candidate/interview-ended");
-        }
-      }
-    };
-
-    document.addEventListener("fullscreenchange", handleFullScreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullScreenChange);
-  }, [interviewStarted, candidate]); // Depends on interviewStarted and candidate
+  // console.log("interviewdata tr", interviewdata);
 
   // console.log("interviewdata tr", interviewdata);
 
   console.log("candidate", candidate);
 
-
   const generateFeedback = async (conversationData: any) => {
     console.log("Generating feedback with data:", conversationData);
     try {
-      if (
-        !conversationData ||
-        !Array.isArray(conversationData) ||
-        conversationData.length === 0
-      ) {
+      // Fallback for empty conversation (e.g. manual skip or early exit)
+      const finalConversation =
+        conversationData &&
+        Array.isArray(conversationData) &&
+        conversationData.length > 0
+          ? conversationData
+          : [
+              {
+                role: "system",
+                content:
+                  "The candidate ended the interview early or skipped the interview without any conversation. Please evaluate based on this information (likely a rejection or no-show).",
+              },
+            ];
+
+      if (!finalConversation) {
+        // Should be covered by fallback, but double check
         toast.error("No conversation data available to generate feedback.");
         return;
       }
@@ -452,7 +484,9 @@ export default function Page() {
       // Robust ID resolution: Try candidate's stored ID first, then fall back to URL param
       let targetInterviewId = candidate?.interview_id;
       if (!targetInterviewId) {
-        const normalizedInputId = Array.isArray(interview_id) ? interview_id[0] : interview_id;
+        const normalizedInputId = Array.isArray(interview_id)
+          ? interview_id[0]
+          : interview_id;
         if (normalizedInputId) {
           targetInterviewId = normalizedInputId;
         }
@@ -471,7 +505,7 @@ export default function Page() {
       }
 
       const result = await axios.post("/api/ai-feedback", {
-        conversation: conversationData,
+        conversation: finalConversation,
         candidateId: candidate.id,
         interviewId: targetInterviewId,
       });
@@ -480,6 +514,11 @@ export default function Page() {
 
       if (result.data.success) {
         toast.success("Interview report generated and saved successfully.");
+
+        await axios.post("/api/inngestApis/analysisFunction", {
+          candidateId: candidateId,
+        });
+
         disableMedia();
         if (timerRef.current !== null) {
           clearInterval(timerRef.current);
@@ -492,9 +531,10 @@ export default function Page() {
       const e = err as any;
       const serverMsg = e.response?.data?.error || e.message || "Unknown error";
       console.error("Error generating feedback (Detailed):", {
-        message: e.message,
-        serverError: e.response?.data,
-        status: e.response?.status
+        message: e.message || "No message",
+        serverError: e.response?.data || "No server response data",
+        status: e.response?.status || "No status code",
+        originalError: e,
       });
       toast.error(`Failed to generate feedback: ${serverMsg}`);
     }
@@ -538,8 +578,9 @@ export default function Page() {
         clearInterval(timerRef.current);
       }
     } catch (error: any) {
-      const msg = `Error stopping the interview: ${error.message || "Unknown error"
-        }`;
+      const msg = `Error stopping the interview: ${
+        error.message || "Unknown error"
+      }`;
       toast.error(msg);
       setCallError(msg);
     } finally {
@@ -573,8 +614,9 @@ export default function Page() {
         {/* AI PANEL */}
         <div className="relative bg-gray-800 rounded-xl flex items-center justify-center border border-gray-700">
           <div
-            className={`bg-gray-900 p-6 rounded-full shadow-xl transition-all duration-300 ${!activeUser ? "ring-4 ring-amber-400" : ""
-              }`}
+            className={`bg-gray-900 p-6 rounded-full shadow-xl transition-all duration-300 ${
+              !activeUser ? "ring-4 ring-amber-400" : ""
+            }`}
           >
             <BotMessageSquare size={90} className="text-amber-400" />
           </div>
@@ -601,8 +643,9 @@ export default function Page() {
       <div className="h-20 bg-black/40 flex items-center justify-center gap-6">
         {/* MIC TOGGLE */}
         <button
-          className={`p-4 rounded-full ${micEnabled ? "bg-gray-700" : "bg-red-600"
-            }`}
+          className={`p-4 rounded-full ${
+            micEnabled ? "bg-gray-700" : "bg-red-600"
+          }`}
           onClick={() => {
             setMicEnabled(!micEnabled);
             enableMedia();
@@ -613,8 +656,9 @@ export default function Page() {
 
         {/* CAMERA TOGGLE */}
         <button
-          className={`p-4 rounded-full ${cameraEnabled ? "bg-gray-700" : "bg-red-600"
-            }`}
+          className={`p-4 rounded-full ${
+            cameraEnabled ? "bg-gray-700" : "bg-red-600"
+          }`}
           onClick={() => {
             setCameraEnabled(!cameraEnabled);
             enableMedia();
@@ -640,6 +684,18 @@ export default function Page() {
           </AlertConfirmation>
         )}
       </div>
+      {candidate && interview && (
+        <ProctoringManager
+          interviewId={interview.id}
+          candidateId={candidate.id}
+          videoRef={videoRef}
+          isInterviewStarted={interviewStarted}
+          onTerminate={() => {
+            handleStopInterview();
+            router.push("/candidate/interview-ended");
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -14,7 +14,7 @@ export default function AdminPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="bg-card/20 backdrop-blur-xl border-white/10 hover:bg-card/30 transition-all shadow-lg hover:shadow-primary/10">
           <CardHeader>
             <CardTitle>Create Interview</CardTitle>
             <CardDescription>
@@ -31,7 +31,7 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-card/20 backdrop-blur-xl border-white/10 hover:bg-card/30 transition-all shadow-lg hover:shadow-blue-500/10">
           <CardHeader>
             <CardTitle>View Interviews</CardTitle>
             <CardDescription>

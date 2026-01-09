@@ -44,9 +44,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-background to-muted">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-background">
+      {/* Background Gradients */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+        <div className="absolute top-[-20%] right-[-20%] w-[60%] h-[60%] bg-primary/20 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-20%] left-[-20%] w-[60%] h-[60%] bg-blue-500/10 rounded-full blur-[120px] animate-pulse delay-1000" />
+      </div>
+
+      <Card className="w-full max-w-md backdrop-blur-xl bg-card/50 border-white/10 shadow-2xl relative z-10">
         <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-4">
+            <div className="p-3 bg-primary/20 rounded-full">
+              <LogIn className="h-6 w-6 text-primary" />
+            </div>
+          </div>
           <CardTitle className="text-2xl font-bold text-center">Sign In</CardTitle>
           <CardDescription className="text-center">
             Enter your credentials to access your dashboard
@@ -54,8 +65,8 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           {error && (
-            <Alert className="mb-4 border-red-500 bg-red-50 dark:bg-red-950">
-              <AlertDescription className="text-red-800 dark:text-red-200">
+            <Alert className="mb-4 border-destructive/50 bg-destructive/10 text-destructive">
+              <AlertDescription>
                 {error}
               </AlertDescription>
             </Alert>
@@ -72,6 +83,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
+                className="bg-background/50 border-white/10 focus:border-primary/50"
               />
             </div>
 
@@ -85,10 +97,11 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                className="bg-background/50 border-white/10 focus:border-primary/50"
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -103,13 +116,15 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            Accounts are created and managed by your placement administrator.{" "}
-            Please contact your admin if you don't have login credentials.
+          <div className="mt-6 text-center text-xs text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="text-primary hover:underline font-medium">
+              Sign up
+            </Link>
           </div>
 
-          <div className="mt-4 text-center">
-            <Link href="/" className="text-sm text-muted-foreground hover:underline">
+          <div className="mt-2 text-center text-xs text-muted-foreground">
+            <Link href="/" className="hover:text-primary transition-colors">
               ← Back to home
             </Link>
           </div>

@@ -25,10 +25,10 @@ interface PageProps {
 
 export default async function InterviewDashboardPage({ params }: PageProps) {
   const { interviewId } = await params;
-  
+
   let interview = null;
   let candidates: Candidate[] = [];
-  
+
   try {
     interview = await getInterviewById(interviewId);
     candidates = await getCandidatesByInterview(interviewId);
@@ -60,7 +60,7 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="bg-card/40 backdrop-blur-md border-white/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Total Candidates
@@ -74,7 +74,7 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-card/40 backdrop-blur-md border-white/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Promoted Candidates
@@ -93,7 +93,7 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-card/40 backdrop-blur-md border-white/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Interviews Completed
@@ -109,7 +109,7 @@ export default async function InterviewDashboardPage({ params }: PageProps) {
       </div>
 
       {/* Candidate Results Table */}
-      <Card>
+      <Card className="bg-card/40 backdrop-blur-md border-white/5">
         <CardHeader>
           <CardTitle>Candidate Results</CardTitle>
         </CardHeader>
