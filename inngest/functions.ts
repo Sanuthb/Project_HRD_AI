@@ -1,3 +1,4 @@
+import { adminSupabase } from "@/lib/supabase/admin";
 import { inngest } from "./client";
 import { generatefeedbackanalysis } from "@/lib/services/ai-feedbackanalysis";
 
@@ -19,8 +20,23 @@ export const analysisFunction = inngest.createFunction(
         generatefeedbackanalysis(event.data.resumeData, event.data.feedbackData)
       );
 
-      await step.run("save-report", () => {
-        // TODO: save report to database
+      await step.run("save-report", async () => {
+        if (!adminSupabase) {
+          throw new Error("adminSupabase is not initialized. Check environment variables.");
+        }
+        const { data, error } = await adminSupabase
+          .from("feedback_analysis")
+          .insert({
+            candidate_id: event.data.candidateId,
+            analysis: generateReport,
+          })
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Failed to save feedback analysis: ${error.message}`);
+        }
+        return data;
       });
     } catch (error) {
       console.error("Error in analysis function:", error);

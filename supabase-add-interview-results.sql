@@ -19,3 +19,12 @@ ALTER TABLE interview_results ENABLE ROW LEVEL SECURITY;
 -- Create policies
 CREATE POLICY "Allow all operations on interview_results" ON interview_results
   FOR ALL USING (true) WITH CHECK (true);
+
+
+CREATE TABLE IF NOT EXISTS  feedback_analysis (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    candidate_id UUID REFERENCES candidates(id) ON DELETE CASCADE,
+    analysis JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

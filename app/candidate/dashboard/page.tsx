@@ -17,14 +17,15 @@ import {
 import { Candidate, Interview } from "@/lib/types";
 import { getCandidateByUserId } from "@/lib/services/candidates";
 import { getInterviewById } from "@/lib/services/interviews";
-import { useAuth } from "@/lib/contexts/auth-context";
+import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
 import { ProtectedRoute } from "@/components/protected-route";
 import { toast } from "sonner";
 import { adminSupabase } from "@/lib/supabase/admin";
 
 function CandidateDashboardContent() {
   const router = useRouter();
-  const { user, candidateId, signOut } = useAuth();
+  const { data: session } = useSession();
+  const user = session?.user;
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,7 +59,7 @@ function CandidateDashboardContent() {
     const fetchData = async () => {
       if (!user) {
         setIsLoading(false);
-        setError("You must be logged in to view the dashboard.");
+        // ProtectedRoute handles redirection, but we wait for session
         return;
       }
 
@@ -67,7 +68,8 @@ function CandidateDashboardContent() {
 
       try {
         // Fetch candidate data using the logged-in user's profile (USN / candidate_id)
-        const candidateData = await getCandidateByUserId(user.id);
+        // @ts-ignore - session user id might be sub or id
+        const candidateData = await getCandidateByUserId(user.id || user.sub);
 
         if (!candidateData) {
           setError(
@@ -138,7 +140,7 @@ function CandidateDashboardContent() {
   }, [interview]);
 
   const handleSignOut = async () => {
-    await signOut();
+    await nextAuthSignOut({ redirect: false });
     router.push("/login");
   };
 
@@ -146,11 +148,11 @@ function CandidateDashboardContent() {
     candidate?.status === "Promoted"
       ? "Completed"
       : candidate?.status === "Not Promoted"
-      ? "Completed"
-      : candidate?.resume_score !== null &&
-        candidate?.resume_score !== undefined
-      ? "Scheduled"
-      : "Pending";
+        ? "Completed"
+        : candidate?.resume_score !== null &&
+          candidate?.resume_score !== undefined
+          ? "Scheduled"
+          : "Pending";
 
   if (isLoading) {
     return (
@@ -215,8 +217,8 @@ function CandidateDashboardContent() {
                       interviewStatus === "Scheduled"
                         ? "default"
                         : interviewStatus === "Completed"
-                        ? "secondary"
-                        : "outline"
+                          ? "secondary"
+                          : "outline"
                     }
                   >
                     {interviewStatus === "Scheduled" && (
@@ -236,10 +238,10 @@ function CandidateDashboardContent() {
                         - If no score, show "Upload Resume"
                   */}
                   {candidate.status === "Promoted" ||
-                  candidate.manually_promoted ||
-                  (candidate.resume_score !== null &&
-                    candidate.resume_score !== undefined &&
-                    candidate.resume_score >= 75) ? (
+                    candidate.manually_promoted ||
+                    (candidate.resume_score !== null &&
+                      candidate.resume_score !== undefined &&
+                      candidate.resume_score >= 75) ? (
                     <Button
                       size="sm"
                       onClick={() =>
@@ -328,8 +330,8 @@ function CandidateDashboardContent() {
                       candidate.status === "Promoted"
                         ? "default"
                         : candidate.status === "Not Promoted"
-                        ? "destructive"
-                        : "secondary"
+                          ? "destructive"
+                          : "secondary"
                     }
                     className="text-base px-3 py-1"
                   >

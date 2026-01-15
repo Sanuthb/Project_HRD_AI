@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isLoadingRef = useRef(false);
 
   const [name, setName] = useState("");
   const [usn, setUsn] = useState("");
@@ -69,7 +70,10 @@ export default function AdminUsersPage() {
   const [updating, setUpdating] = useState(false);
   const [deletingUsn, setDeletingUsn] = useState<string | null>(null);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
+    if (isLoadingRef.current) return; // Prevent multiple simultaneous calls
+
+    isLoadingRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -85,12 +89,13 @@ export default function AdminUsersPage() {
       setError(err.message || "Failed to load users");
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [loadUsers]);
 
   const handleCreate = async (e: React.FormEvent) => {
     // ... existing handleCreate logic is fine, but I'll update it to use loadUsers for consistency if needed
@@ -213,7 +218,8 @@ export default function AdminUsersPage() {
       <div>
         <h1 className="text-3xl font-bold">User Management</h1>
         <p className="text-muted-foreground">
-          Add and manage candidate user accounts with batch and department filters.
+          Add and manage candidate user accounts with batch and department
+          filters.
         </p>
       </div>
 
@@ -297,8 +303,8 @@ export default function AdminUsersPage() {
             </div>
           </form>
           <p className="mt-2 text-xs text-muted-foreground">
-            A Supabase Auth account will be created automatically. Temporary password
-            is based on USN (e.g. <code>USN@123</code>).
+            A Supabase Auth account will be created automatically. Temporary
+            password is based on USN (e.g. <code>USN@123</code>).
           </p>
         </CardContent>
       </Card>
@@ -435,27 +441,38 @@ export default function AdminUsersPage() {
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          
+
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Are you absolutely sure?
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  This will permanently delete the user "<strong>{u.name}</strong>" (USN: {u.usn}), their auth account, and all their candidate records.
+                                  This will permanently delete the user "
+                                  <strong>{u.name}</strong>" (USN: {u.usn}),
+                                  their auth account, and all their candidate
+                                  records.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction 
+                                <AlertDialogAction
                                   onClick={() => handleDelete(u.usn)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
-                                  {deletingUsn === u.usn ? "Deleting..." : "Delete"}
+                                  {deletingUsn === u.usn
+                                    ? "Deleting..."
+                                    : "Delete"}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -562,5 +579,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-
-

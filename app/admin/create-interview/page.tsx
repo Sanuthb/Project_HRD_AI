@@ -21,6 +21,7 @@ import { createCandidatesBulk } from "@/lib/services/candidates";
 import { uploadJobDescription } from "@/lib/services/storage";
 import { parseJobDescription } from "@/lib/services/jd-parser";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 export default function CreateInterviewPage() {
   const router = useRouter();
@@ -84,12 +85,12 @@ export default function CreateInterviewPage() {
   const parseExcelFile = async (file: File): Promise<Array<{ name: string; usn: string; email?: string; batch?: string; dept?: string }>> => {
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
     const text = await file.text();
-    
+
     // Handle CSV files
     if (fileExtension === 'csv' || fileExtension === 'txt') {
       // Try different line endings
       const lines = text.split(/\r?\n/).filter(line => line.trim());
-      
+
       if (lines.length === 0) {
         throw new Error("File is empty");
       }
@@ -104,7 +105,7 @@ export default function CreateInterviewPage() {
       }
 
       const headers = firstLine.split(delimiter).map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
-      
+
       const nameIndex = headers.findIndex(h => h.includes('name') && !h.includes('usn'));
       const usnIndex = headers.findIndex(h => h.includes('usn') || h.includes('student') || h.includes('id'));
       const emailIndex = headers.findIndex(h => h.includes('email') || h.includes('mail'));
@@ -156,11 +157,51 @@ export default function CreateInterviewPage() {
       }
 
       return candidates;
+    } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        if (jsonData.length === 0) {
+          throw new Error("Excel file is empty");
+        }
+
+        // Map columns dynamically
+        const firstRow = jsonData[0];
+        const keys = Object.keys(firstRow);
+
+        const nameKey = keys.find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('usn'));
+        const usnKey = keys.find(k => k.toLowerCase().includes('usn') || k.toLowerCase().includes('student') || k.toLowerCase().includes('id'));
+        const emailKey = keys.find(k => k.toLowerCase().includes('email') || k.toLowerCase().includes('mail'));
+        const batchKey = keys.find(k => k.toLowerCase().includes('batch') || k.toLowerCase().includes('year'));
+        const deptKey = keys.find(k => k.toLowerCase().includes('dept') || k.toLowerCase().includes('department') || k.toLowerCase().includes('branch'));
+
+        if (!nameKey || !usnKey) {
+          throw new Error(
+            `Excel file must have "Name" and "USN" columns. Found columns: ${keys.join(', ')}`
+          );
+        }
+
+        const candidates = jsonData.map(row => ({
+          name: row[nameKey]?.toString().trim(),
+          usn: row[usnKey]?.toString().trim(),
+          email: emailKey ? row[emailKey]?.toString().trim() : undefined,
+          batch: batchKey ? row[batchKey]?.toString().trim() : undefined,
+          dept: deptKey ? row[deptKey]?.toString().trim() : undefined,
+        })).filter(c => c.name && c.usn);
+
+        if (candidates.length === 0) {
+          throw new Error("No valid candidates found in Excel file. Ensure Name and USN are present.");
+        }
+
+        return candidates;
+      } catch (err: any) {
+        throw new Error(`Failed to parse Excel file: ${err.message}`);
+      }
     } else {
-      // For Excel files (.xlsx, .xls), we need to inform the user to convert to CSV
-      throw new Error(
-        `Excel files (.xlsx, .xls) are not directly supported. Please save your file as CSV format and try again.`
-      );
+      throw new Error(`Unsupported file format (.${fileExtension}). Please upload a CSV or Excel file.`);
     }
   };
 
@@ -222,13 +263,16 @@ export default function CreateInterviewPage() {
       // Parse and create candidates
       toast.info("Processing candidates...");
       let candidates: Array<{ name: string; usn: string; email?: string; batch?: string; dept?: string }>;
-      
+
       try {
         candidates = await parseExcelFile(candidatesFile);
+        console.log("candidates", candidates);
+
       } catch (parseError: any) {
+        console.log("parseError", parseError);
         throw new Error(`Failed to parse candidates file: ${parseError.message}`);
       }
-      
+
       if (candidates.length === 0) {
         throw new Error("No valid candidates found in the file. Please check the file format.");
       }
@@ -469,9 +513,9 @@ export default function CreateInterviewPage() {
               <div className="text-xs text-muted-foreground mt-1 space-y-1">
                 <p>Example CSV format:</p>
                 <code className="text-xs bg-muted p-1 rounded block">Name,USN,Email,Batch,Department<br />John Doe,1NH20CS001,john@example.com,2024,CSE</code>
-                <a 
-                  href="/sample-candidates.csv" 
-                  download 
+                <a
+                  href="/sample-candidates.csv"
+                  download
                   className="text-blue-600 hover:underline inline-block mt-1"
                 >
                   📥 Download sample CSV file
@@ -522,8 +566,8 @@ export default function CreateInterviewPage() {
         </Card>
 
         <div className="flex justify-end gap-4">
-          <Button 
-            type="button" 
+          <Button
+            type="button"
             variant="outline"
             onClick={() => router.push("/admin/interviews")}
             disabled={isSubmitting}

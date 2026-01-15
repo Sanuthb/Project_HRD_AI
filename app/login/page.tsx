@@ -3,18 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { signIn } from "next-auth/react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, LogIn } from "lucide-react";
-import { useAuth } from "@/lib/contexts/auth-context";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -26,14 +31,30 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password: password.trim(),
+        redirect: false,
+      });
 
-      if (error) {
-        setError(error.message || "Failed to sign in");
-        toast.error(error.message || "Failed to sign in");
+      if (result?.error) {
+        setError(
+          "Invalid credentials. Please check your email/USN and password."
+        );
+        toast.error("Invalid credentials");
       } else {
         toast.success("Signed in successfully!");
-        router.push("/candidate/dashboard");
+
+        // Fetch current session to determine role
+        const response = await fetch("/api/auth/session");
+        const session = await response.json();
+        const role = session?.user?.role;
+
+        if (role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/candidate/dashboard");
+        }
       }
     } catch (err: any) {
       setError(err.message || "An error occurred");
@@ -58,27 +79,27 @@ export default function LoginPage() {
               <LogIn className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold text-center">Sign In</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">
+            Sign In
+          </CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to access your dashboard
+            Enter your email or USN and password to access your dashboard
           </CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
             <Alert className="mb-4 border-destructive/50 bg-destructive/10 text-destructive">
-              <AlertDescription>
-                {error}
-              </AlertDescription>
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email or USN</Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="your.email@example.com"
+                type="text"
+                placeholder="your.email@example.com or USN"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -101,7 +122,11 @@ export default function LoginPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25" disabled={isLoading}>
+            <Button
+              type="submit"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25"
+              disabled={isLoading}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -118,7 +143,10 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center text-xs text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-primary hover:underline font-medium">
+            <Link
+              href="/signup"
+              className="text-primary hover:underline font-medium"
+            >
               Sign up
             </Link>
           </div>
@@ -133,4 +161,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

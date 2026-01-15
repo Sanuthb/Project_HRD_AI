@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { adminSupabase } from '@/lib/supabase/admin';
 import { Interview } from '@/lib/types';
 
 export async function createInterview(data: {
@@ -70,7 +71,8 @@ export async function getInterviews(): Promise<Interview[]> {
 }
 
 export async function getInterviewById(id: string): Promise<Interview | null> {
-  const { data, error } = await supabase
+  const client = adminSupabase || supabase;
+  const { data, error } = await client
     .from('interviews')
     .select('*')
     .eq('id', id)

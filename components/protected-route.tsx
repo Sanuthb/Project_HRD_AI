@@ -2,11 +2,13 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/contexts/auth-context";
+import { useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { data: session, status } = useSession();
+  const loading = status === "loading";
+  const user = session?.user;
   const router = useRouter();
 
   useEffect(() => {

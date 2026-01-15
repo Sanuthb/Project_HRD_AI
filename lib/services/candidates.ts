@@ -51,8 +51,7 @@ export async function createCandidatesBulk(
   const createdOrUpdated: any[] = [];
   const skipped: Array<{ usn: string; reason: string }> = [];
 
-  // Get all registered USNs first to check existence efficiently
-  // CRITICAL: Use admin client to bypass RLS on user_profiles
+  // 0) Get all registered USNs first to check existence efficiently
   const client = adminSupabase || supabase;
   const { data: registeredProfiles } = await client
     .from('user_profiles')
@@ -62,15 +61,10 @@ export async function createCandidatesBulk(
 
   for (const candidate of candidates) {
     const usn = candidate.usn.trim();
-
-    // 0) CRITICAL: Check if user exists in user_profiles
-    if (!registeredUSNs.has(usn)) {
-      skipped.push({ usn, reason: "No registered account found" });
-      continue;
-    }
+    let candidateRecord: any = null;
 
     // 1) Check if we already have a candidate for this USN *AND* this Interview
-    const { data: existingList, error: existingError } = await supabase
+    const { data: existingList, error: existingError } = await client
       .from('candidates')
       .select('*')
       .eq('usn', usn)
@@ -86,7 +80,7 @@ export async function createCandidatesBulk(
 
     if (existing) {
       // 2a) Reuse existing candidate row – update basic data
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('candidates')
         .update({
           name: candidate.name,
@@ -102,15 +96,14 @@ export async function createCandidatesBulk(
         console.error('Error updating existing candidate in bulk create:', error);
         throw error;
       }
-
-      createdOrUpdated.push(data);
+      candidateRecord = data;
     } else {
       // 2b) Create a NEW candidate record for this interview
       let finalBatch = candidate.batch;
       let finalDept = candidate.dept;
 
       if (!finalBatch || !finalDept) {
-        const { data: globalExisting } = await supabase
+        const { data: globalExisting } = await client
           .from('candidates')
           .select('batch, dept')
           .eq('usn', usn)
@@ -125,7 +118,7 @@ export async function createCandidatesBulk(
         }
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('candidates')
         .insert([{
           name: candidate.name,
@@ -145,8 +138,30 @@ export async function createCandidatesBulk(
         console.error('Error creating candidate in bulk create:', error);
         throw error;
       }
+      candidateRecord = data;
+    }
 
-      createdOrUpdated.push(data);
+    // 3) Sync with user_profiles: If USN doesn't have a profile, create one
+    if (candidateRecord && !registeredUSNs.has(usn)) {
+      const { error: profileError } = await client
+        .from('user_profiles')
+        .insert([{
+          usn: usn,
+          email: candidate.email,
+          role: 'candidate',
+          candidate_id: candidateRecord.id
+        }]);
+
+      if (profileError) {
+        console.error(`Error creating user profile for USN ${usn}:`, profileError);
+        // We don't throw here to avoid failing the whole batch, but we log it
+      } else {
+        registeredUSNs.add(usn);
+      }
+    }
+
+    if (candidateRecord) {
+      createdOrUpdated.push(candidateRecord);
     }
   }
 
@@ -195,28 +210,68 @@ export async function searchRegisteredUsers(query: string, interviewId: string) 
 }
 
 export async function addCandidateToInterview(usn: string, interviewId: string) {
-  // 1) Get latest info for this USN
-  const { data: userInfo, error: fetchError } = await supabase
+  const client = adminSupabase || supabase;
+  const trimmedUsn = usn.trim();
+
+  // 1) Check if already in THIS interview
+  const { data: existingInInterview } = await client
     .from('candidates')
     .select('*')
-    .eq('usn', usn)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    .eq('usn', trimmedUsn)
+    .eq('interview_id', interviewId)
+    .maybeSingle();
 
-  if (fetchError || !userInfo) {
-    throw new Error("User info not found");
+  if (existingInInterview) {
+    return existingInInterview;
   }
 
-  // 2) Create new candidate record for this interview
-  const { data, error } = await supabase
+  // 2) Check if there's a "Global" record (from signup) that hasn't been assigned yet
+  const { data: globalRecord } = await client
+    .from('candidates')
+    .select('*')
+    .eq('usn', trimmedUsn)
+    .is('interview_id', null)
+    .maybeSingle();
+
+  if (globalRecord) {
+    // Adopt the global record for this interview
+    const { data, error } = await client
+      .from('candidates')
+      .update({ interview_id: interviewId })
+      .eq('id', globalRecord.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error adopting global candidate:", error);
+      throw new Error(`Failed to assign user: ${error.message}`);
+    }
+    return data;
+  }
+
+  // 3) No existing record for this interview or global. 
+  // Get info from any other interview record to clone it.
+  const { data: anyExisting } = await client
+    .from('candidates')
+    .select('*')
+    .eq('usn', trimmedUsn)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!anyExisting) {
+    throw new Error(`No registration found for USN ${trimmedUsn}. The student must sign up first.`);
+  }
+
+  // Create a new record for this interview
+  const { data, error } = await client
     .from('candidates')
     .insert([{
-      name: userInfo.name,
-      usn: userInfo.usn,
-      email: userInfo.email,
-      batch: userInfo.batch,
-      dept: userInfo.dept,
+      name: anyExisting.name,
+      usn: trimmedUsn,
+      email: anyExisting.email,
+      batch: anyExisting.batch,
+      dept: anyExisting.dept,
       interview_id: interviewId,
       status: 'Pending',
       resume_status: 'Pending',
@@ -225,7 +280,11 @@ export async function addCandidateToInterview(usn: string, interviewId: string) 
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("Error creating candidate record:", error);
+    throw new Error(`Failed to add candidate: ${error.message}`);
+  }
+
   return data;
 }
 
@@ -426,9 +485,10 @@ export async function getCandidateByUSN(usn: string): Promise<Candidate | null> 
 }
 
 export async function getCandidateByUserId(userId: string): Promise<Candidate | null> {
+  const client = adminSupabase || supabase;
   try {
     // First get the user profile to find USN (and candidate_id if needed)
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await client
       .from('user_profiles')
       .select('candidate_id, usn')
       .eq('id', userId)
@@ -442,7 +502,7 @@ export async function getCandidateByUserId(userId: string): Promise<Candidate | 
     // Prefer looking up by USN so that a candidate can have multiple interview rows.
     if (profile.usn) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await client
           .from('candidates')
           .select('*')
           .eq('usn', profile.usn)
@@ -476,7 +536,34 @@ export async function getCandidateByUserId(userId: string): Promise<Candidate | 
 
     // Fallback: use candidate_id if present
     if (profile.candidate_id) {
-      return await getCandidateById(profile.candidate_id);
+      // Use client (adminSupabase) for getCandidateById as well
+      const { data: candidate, error: candidateError } = await client
+        .from('candidates')
+        .select('*')
+        .eq('id', profile.candidate_id)
+        .maybeSingle();
+
+      if (candidateError || !candidate) {
+        return null;
+      }
+
+      return {
+        id: candidate.id,
+        name: candidate.name,
+        usn: candidate.usn,
+        email: candidate.email,
+        resume_score: candidate.resume_score,
+        resume_url: candidate.resume_url,
+        resume_text: candidate.resume_text,
+        status: candidate.status,
+        interview_id: candidate.interview_id,
+        resume_status: candidate.resume_status,
+        interview_status: candidate.interview_status,
+        manually_promoted: candidate.manually_promoted,
+        override_by_admin: candidate.override_by_admin,
+        manual_interview_deadline: candidate.manual_interview_deadline,
+        created_at: candidate.created_at,
+      };
     }
 
     return null;
