@@ -37,7 +37,7 @@ export interface Candidate {
   malpractice_score?: number;
   malpractice_details?: string;
 
-  interview_id?: string;
+  interview_ids?: string[]; // Array of interview IDs
   created_at?: string;
   // AI Proctoring
   risk_score?: number;

@@ -1,9 +1,21 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ArrowRight, Sparkles, LayoutDashboard, User, ShieldCheck, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  Sparkles,
+  LayoutDashboard,
+  User,
+  ShieldCheck,
+  Zap,
+} from "lucide-react";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { toast } from "sonner";
 
 export default function HomePage() {
+  const { user } = useAuth();
   return (
     <div className="relative min-h-screen flex flex-col items-center overflow-hidden bg-background selection:bg-primary/20">
       {/* Background Gradients */}
@@ -25,12 +37,25 @@ export default function HomePage() {
         <div className="flex gap-4 items-center">
           <ModeToggle />
           <Link href="/login">
-            <Button variant="ghost" className="hover:bg-primary/10 hover:text-primary transition-colors">
+            <Button
+              variant="ghost"
+              className="hover:bg-primary/10 hover:text-primary transition-all duration-200 hover:scale-105 border border-border/50 hover:border-primary/30"
+            >
               Sign In
             </Button>
           </Link>
-          <Link href="/signup">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20">
+          <Link href="/admin-login">
+            <Button
+              variant="ghost"
+              className="hover:bg-blue-600/10 hover:text-blue-600 transition-all duration-200 hover:scale-105 border border-border/50 hover:border-blue-600/30"
+            >
+              Admin Login
+            </Button>
+          </Link>
+          <Link
+            href={user?.role === "admin" ? "/admin" : "/candidate/dashboard"}
+          >
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/35 hover:scale-105 transition-all duration-200 font-semibold">
               Get Started
             </Button>
           </Link>
@@ -53,19 +78,35 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg text-muted-foreground leading-relaxed max-w-xl">
-            Experience the future of recruitment with our AI-powered interview platform.
-            Real-time feedback, voice interaction, and automated scoring to boost your placement success.
+            Experience the future of recruitment with our AI-powered interview
+            platform. Real-time feedback, voice interaction, and automated
+            scoring to boost your placement success.
           </p>
 
           <div className="flex flex-wrap gap-4 pt-4">
-            <Link href="/candidate">
-              <Button size="lg" className="h-12 px-8 text-base bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-xl shadow-primary/20 border-none">
+            <Link
+              href={user?.role === "admin" ? "/" : "/candidate/dashboard"}
+              onClick={(e) => {
+                if (user?.role === "admin") {
+                  e.preventDefault();
+                  toast("You admin user not allowed to access start interview");
+                }
+              }}
+            >
+              <Button
+                size="lg"
+                className="h-12 px-8 text-base bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-xl shadow-primary/20 border-none"
+              >
                 Start Interview
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-            <Link href="/admin">
-              <Button size="lg" variant="outline" className="h-12 px-8 text-base border-primary/20 hover:bg-primary/5 hover:border-primary/50 text-foreground transition-all">
+            <Link href="/admin-login">
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 px-8 text-base border-primary/20 hover:bg-primary/5 hover:border-primary/50 text-foreground transition-all"
+              >
                 Admin Portal
               </Button>
             </Link>
@@ -117,14 +158,20 @@ export default function HomePage() {
               </div>
               <div>
                 <h3 className="font-semibold">Admin Dashboard</h3>
-                <p className="text-xs text-muted-foreground">Manage Interviews</p>
+                <p className="text-xs text-muted-foreground">
+                  Manage Interviews
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-2xl font-bold">124</span>
-              <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">+12%</span>
+              <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
+                +12%
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">Active Candidates this week</p>
+            <p className="text-xs text-muted-foreground">
+              Active Candidates this week
+            </p>
           </div>
         </div>
       </main>

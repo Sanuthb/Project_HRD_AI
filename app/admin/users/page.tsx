@@ -46,6 +46,7 @@ interface AdminUser {
   interviewId: string | null;
   interviewTitle: string | null;
   hasAuthUser: boolean;
+  role: string | null;
 }
 
 export default function AdminUsersPage() {
@@ -63,6 +64,7 @@ export default function AdminUsersPage() {
 
   const [filterBatch, setFilterBatch] = useState<string>("");
   const [filterDept, setFilterDept] = useState<string>("");
+  const [filterRole, setFilterRole] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -96,6 +98,8 @@ export default function AdminUsersPage() {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  console.log("user=", users);
 
   const handleCreate = async (e: React.FormEvent) => {
     // ... existing handleCreate logic is fine, but I'll update it to use loadUsers for consistency if needed
@@ -138,7 +142,7 @@ export default function AdminUsersPage() {
       setUsers((prev) => [created, ...prev]);
 
       toast.success(
-        `User created. Temporary password: ${data.data.auth.tempPassword}`
+        `User created. Temporary password: ${data.data.auth.tempPassword}`,
       );
 
       setName("");
@@ -202,7 +206,7 @@ export default function AdminUsersPage() {
 
       toast.success("User updated successfully");
       setUsers((prev) =>
-        prev.map((u) => (u.usn === editingUser.usn ? editingUser : u))
+        prev.map((u) => (u.usn === editingUser.usn ? editingUser : u)),
       );
       setIsEditDialogOpen(false);
     } catch (err: any) {
@@ -336,7 +340,7 @@ export default function AdminUsersPage() {
                 >
                   <option value="">All</option>
                   {Array.from(
-                    new Set(users.map((u) => u.batch).filter(Boolean))
+                    new Set(users.map((u) => u.batch).filter(Boolean)),
                   ).map((b) => (
                     <option key={b as string} value={b as string}>
                       {b}
@@ -355,10 +359,29 @@ export default function AdminUsersPage() {
                 >
                   <option value="">All</option>
                   {Array.from(
-                    new Set(users.map((u) => u.dept).filter(Boolean))
+                    new Set(users.map((u) => u.dept).filter(Boolean)),
                   ).map((d) => (
                     <option key={d as string} value={d as string}>
                       {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-xs font-medium text-muted-foreground">
+                  Filter by Role
+                </span>
+                <select
+                  className="w-40 rounded-md border border-input bg-background px-3 py-1.5 text-xs"
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {Array.from(
+                    new Set(users.map((u) => u.role).filter(Boolean)),
+                  ).map((r) => (
+                    <option key={r as string} value={r as string}>
+                      {r}
                     </option>
                   ))}
                 </select>
@@ -374,7 +397,7 @@ export default function AdminUsersPage() {
               filtered = filtered.filter(
                 (u) =>
                   u.name.toLowerCase().includes(lower) ||
-                  u.usn.toLowerCase().includes(lower)
+                  u.usn.toLowerCase().includes(lower),
               );
             }
             if (filterBatch) {
@@ -382,6 +405,9 @@ export default function AdminUsersPage() {
             }
             if (filterDept) {
               filtered = filtered.filter((u) => u.dept === filterDept);
+            }
+            if (filterRole) {
+              filtered = filtered.filter((u) => u.role === filterRole);
             }
 
             if (loading) {
@@ -408,6 +434,7 @@ export default function AdminUsersPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>USN</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Batch</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Auth Account</TableHead>
@@ -420,6 +447,7 @@ export default function AdminUsersPage() {
                       <TableCell className="font-medium">{u.name}</TableCell>
                       <TableCell>{u.usn}</TableCell>
                       <TableCell>{u.email || "-"}</TableCell>
+                      <TableCell>{u.role || "-"}</TableCell>
                       <TableCell>{u.batch || "-"}</TableCell>
                       <TableCell>{u.dept || "-"}</TableCell>
                       <TableCell>
@@ -503,7 +531,7 @@ export default function AdminUsersPage() {
                   value={editingUser?.name || ""}
                   onChange={(e) =>
                     setEditingUser((prev) =>
-                      prev ? { ...prev, name: e.target.value } : null
+                      prev ? { ...prev, name: e.target.value } : null,
                     )
                   }
                   required
@@ -521,7 +549,7 @@ export default function AdminUsersPage() {
                   value={editingUser?.email || ""}
                   onChange={(e) =>
                     setEditingUser((prev) =>
-                      prev ? { ...prev, email: e.target.value } : null
+                      prev ? { ...prev, email: e.target.value } : null,
                     )
                   }
                   required
@@ -535,7 +563,7 @@ export default function AdminUsersPage() {
                     value={editingUser?.batch || ""}
                     onChange={(e) =>
                       setEditingUser((prev) =>
-                        prev ? { ...prev, batch: e.target.value } : null
+                        prev ? { ...prev, batch: e.target.value } : null,
                       )
                     }
                   />
@@ -547,7 +575,7 @@ export default function AdminUsersPage() {
                     value={editingUser?.dept || ""}
                     onChange={(e) =>
                       setEditingUser((prev) =>
-                        prev ? { ...prev, dept: e.target.value } : null
+                        prev ? { ...prev, dept: e.target.value } : null,
                       )
                     }
                   />

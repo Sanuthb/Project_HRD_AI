@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,21 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, CheckCircle2, XCircle, FileText, Loader2 } from "lucide-react";
-import { updateCandidateResume, getCandidateById } from "@/lib/services/candidates";
+import { Upload, CheckCircle2, XCircle, FileText, Loader2, Briefcase } from "lucide-react";
+import {
+  updateCandidateResume,
+  getCandidateById,
+  getCandidateByUserId,
+  getCandidateByUSN,
+  getInterviewsForUSN,
+} from "@/lib/services/candidates";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadResume as uploadResumeFile } from "@/lib/services/storage";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -18,8 +31,13 @@ import { toast } from "sonner";
 
 function ResumeUploadContent() {
   const router = useRouter();
-  const { candidateId } = useAuth();
+  const searchParams = useSearchParams();
+  const interviewIdParam = searchParams.get("interviewId");
+
+  const { user, loading } = useAuth();
+  const [fetchedCandidateId, setFetchedCandidateId] = useState<string | null>(null);
   const [interviewId, setInterviewId] = useState<string | null>(null);
+  const [applications, setApplications] = useState<any[]>([]); 
   const [file, setFile] = useState<File | null>(null);
   const [uploaded, setUploaded] = useState(false);
   const [score, setScore] = useState<number | null>(null);
@@ -49,8 +67,13 @@ function ResumeUploadContent() {
       return;
     }
 
-    if (!candidateId) {
+    if (!fetchedCandidateId) {
       setError("No candidate profile linked. Please contact administrator.");
+      return;
+    }
+    
+    if (!interviewId) {
+      setError("Please select an interview to upload for.");
       return;
     }
 
@@ -59,7 +82,8 @@ function ResumeUploadContent() {
 
     try {
       toast.info("Uploading resume...");
-      const resumeUrl = await uploadResumeFile(file, candidateId);
+      // Use fetchedCandidateId instead of context candidateId
+      const resumeUrl = await uploadResumeFile(file, fetchedCandidateId);
 
       // Call backend AI resume analysis (LangChain + Gemini)
       toast.info("Analyzing resume with AI...");
@@ -92,8 +116,15 @@ function ResumeUploadContent() {
 
       const resumeText = analysis.resumeText;
 
-      // Update candidate record
-      await updateCandidateResume(candidateId, resumeUrl, overallScore, resumeText, analysis);
+      // Update candidate record using fetchedCandidateId AND interviewId
+      await updateCandidateResume(
+        fetchedCandidateId,
+        resumeUrl,
+        overallScore,
+        resumeText,
+        analysis,
+        interviewId 
+      );
 
       setScore(overallScore);
       setSkillsScore(analysis.skillsMatchScore ?? null);
@@ -102,7 +133,22 @@ function ResumeUploadContent() {
       setEligible(isEligible);
       setUploaded(true);
       
+      // Update local state for the selected application to reflect changes immediately
+      setApplications(prev => prev.map(app => 
+        app.interviews.id === interviewId 
+          ? { ...app, resume_score: overallScore, status: isEligible ? "Promoted" : "Not Promoted" } 
+          : app
+      ));
+
       toast.success("Resume uploaded and analyzed successfully!");
+      
+      if (interviewIdParam) {
+          // Delay briefly then go back to details
+          setTimeout(() => {
+              router.push(`/candidate/interview-details/${interviewIdParam}`);
+          }, 1500);
+      }
+
     } catch (err: any) {
       console.error("Error uploading resume:", err);
       setError(err.message || "Failed to upload resume. Please try again.");
@@ -114,19 +160,59 @@ function ResumeUploadContent() {
 
   useEffect(() => {
     const fetchCandidateData = async () => {
-      if (!candidateId) return;
-      try {
-        const data = await getCandidateById(candidateId);
-        
-        // If we found the candidate, set the interview ID
-        if (data?.interview_id) {
-          setInterviewId(data.interview_id);
+      // Prioritize USN as it's more stable than ID for lookups involved in deduplication
+      if (user?.usn) {
+        try {
+          console.log("Fetching interviews by USN:", user.usn);
+          // NEW: Get all interviews using the new service that queries candidate_interviews
+          const apps = await getInterviewsForUSN(user.usn);
+          
+          if (apps && apps.length > 0) {
+            console.log("Fetched applications:", apps);
+            setApplications(apps);
+            setFetchedCandidateId(apps[0].id); // All apps have same candidate ID
+            
+            // Logic for interview selection
+            if (interviewIdParam) {
+                const valid = apps.find(a => a.interviews.id === interviewIdParam);
+                if (valid) {
+                    setInterviewId(interviewIdParam);
+                } else {
+                    toast.error("Invalid Interview ID or not assigned.");
+                }
+            } else {
+                if (!interviewId) {
+                   setInterviewId(apps[0].interviews.id);
+                }
+            }
+            return; 
+          } else {
+             console.log("No applications found by USN.");
+          }
+        } catch (err) {
+          console.error("Error fetching by USN:", err);
         }
+      }
 
-        // Optional: If they already have a passing score, we could pre-fill the state
-        if (data?.resume_score !== undefined) {
-             // We can decide if we want to show the previous score or force re-upload.
-             // For now, we just ensure interviewId is set so the button works if they upload again.
+      // Legacy fallback
+      if (!user?.id) return;
+      
+      try {
+        const data = await getCandidateByUserId(user.id);
+        
+        if (data) {
+          console.log("Fetched candidate by User ID:", data);
+          setFetchedCandidateId(data.id);
+          if (data.usn) {
+             const apps = await getInterviewsForUSN(data.usn);
+             if (apps.length > 0) {
+                setApplications(apps);
+                setInterviewId(apps[0].interviews.id);
+             }
+          }
+        } else {
+          console.error("No candidate found for user:", user.id);
+          setError("Candidate profile not found. Please contact support.");
         }
       } catch (err) {
         console.error("Error fetching candidate data:", err);
@@ -134,7 +220,7 @@ function ResumeUploadContent() {
     };
 
     fetchCandidateData();
-  }, [candidateId]);
+  }, [user?.id, user?.usn, interviewIdParam]);
 
   const handleTakeInterview = () => {
     if (interviewId) {
@@ -143,6 +229,8 @@ function ResumeUploadContent() {
       toast.error("Interview ID not found. Please contact administrator.");
     }
   };
+  
+  const appForContext = applications.find(a => a.interviews.id === interviewId);
 
   return (
     <div className="space-y-6">
@@ -153,23 +241,57 @@ function ResumeUploadContent() {
         </p>
       </div>
 
-      {error && (
-        <Alert className="border-red-500 bg-red-50 dark:bg-red-950">
-          <XCircle className="h-4 w-4 text-red-600" />
-          <AlertTitle className="text-red-800 dark:text-red-200">
-            Error
-          </AlertTitle>
-          <AlertDescription className="text-red-700 dark:text-red-300">
-            {error}
-          </AlertDescription>
-        </Alert>
-      )}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Resume Upload</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+          
+          {/* Selector: Show only if NO param and multiple apps */}
+          {applications.length > 0 && !interviewIdParam && (
+            <div className="space-y-2">
+              <Label htmlFor="interview-select">Select Interview</Label>
+              <Select
+                value={interviewId || ""}
+                onValueChange={(value) => {
+                  setInterviewId(value);
+                  const app = applications.find(a => a.interviews.id === value);
+                  if (app && app.resume_score) {
+                    setScore(app.resume_score);
+                    setEligible(app.resume_score >= 75);
+                    setUploaded(true); 
+                  } else {
+                    setUploaded(false);
+                    setScore(null);
+                    setEligible(null);
+                  }
+                }}
+              >
+                <SelectTrigger id="interview-select">
+                  <SelectValue placeholder="Select an interview" />
+                </SelectTrigger>
+                <SelectContent>
+                  {applications.map((app) => (
+                    <SelectItem key={app.interviews.id} value={app.interviews.id}>
+                      {app.interviews.title} ({app.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+           {/* Context Alert: Show if param exists (Locked mode) */}
+            {interviewIdParam && appForContext && (
+               <Alert className="bg-muted border-primary/20">
+                  <Briefcase className="h-4 w-4 text-primary" />
+                  <AlertDescription className="flex items-center gap-2 ml-2">
+                      Uploading for: <span className="font-semibold">{appForContext.interviews.title}</span>
+                  </AlertDescription>
+               </Alert>
+            )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Resume Upload</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="resume-file">Select Resume File</Label>
             <div className="flex items-center gap-2">
@@ -197,9 +319,15 @@ function ResumeUploadContent() {
             </div>
           )}
 
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           <Button
             onClick={handleUpload}
-            disabled={!file || isProcessing || uploaded || !candidateId}
+            disabled={!file || isProcessing || !fetchedCandidateId}
             className="w-full"
           >
             {isProcessing ? (
@@ -227,29 +355,39 @@ function ResumeUploadContent() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Resume Match Score</span>
+                  <span className="text-sm font-medium">
+                    Resume Match Score
+                  </span>
                   <span className="text-2xl font-bold">{score}%</span>
                 </div>
                 <Progress value={score} className="h-3" />
               </div>
 
-              {skillsScore !== null || projectsScore !== null || experienceScore !== null ? (
+              {skillsScore !== null ||
+                projectsScore !== null ||
+                experienceScore !== null ? (
                 <div className="grid gap-2 text-sm">
                   {skillsScore !== null && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Skills Match</span>
+                      <span className="text-muted-foreground">
+                        Skills Match
+                      </span>
                       <span className="font-medium">{skillsScore}%</span>
                     </div>
                   )}
                   {projectsScore !== null && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Project Relevance</span>
+                      <span className="text-muted-foreground">
+                        Project Relevance
+                      </span>
                       <span className="font-medium">{projectsScore}%</span>
                     </div>
                   )}
                   {experienceScore !== null && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Experience Suitability</span>
+                      <span className="text-muted-foreground">
+                        Experience Suitability
+                      </span>
                       <span className="font-medium">{experienceScore}%</span>
                     </div>
                   )}
@@ -313,17 +451,18 @@ function ResumeUploadContent() {
             </Badge>
 
             {eligible && (
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 onClick={handleTakeInterview}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8"
               >
-                Take Interview Sekarang
+                Take Interview
               </Button>
             )}
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

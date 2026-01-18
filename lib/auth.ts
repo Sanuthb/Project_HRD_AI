@@ -58,6 +58,34 @@ export const authOptions = {
         }
 
         try {
+          // First, check if this is an admin login
+          const { data: adminUser, error: adminError } = await adminSupabase
+            .from("admin_users")
+            .select("*")
+            .eq("email", credentials.email)
+            .maybeSingle();
+
+          if (adminUser) {
+            // Admin found, validate password against database
+            if (credentials.password !== adminUser.password) {
+              console.error("Invalid admin password");
+              return null;
+            }
+
+            // Return admin user
+            return {
+              id: adminUser.id,
+              email: adminUser.email,
+              name: adminUser.name,
+              usn: "", // Admins don't have USN
+              batch: "",
+              dept: "",
+              candidateId: "",
+              role: adminUser.role, // 'admin' or 'super_admin'
+            };
+          }
+
+          // Not an admin, try candidate login
           // First try to find user by USN or email in candidates table
           const { data: candidate, error: candidateError } = await adminSupabase
             .from("candidates")

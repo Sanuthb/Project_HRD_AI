@@ -11,14 +11,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useAuth } from "@/lib/contexts/auth-context";
 
 export default function CandidateDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  console.log(session);
+  // console.log(session);
 
-
+  const { candidateId } = useAuth();
+  console.log("candidateId=", candidateId);
 
   useEffect(() => {
     if (status === "loading") return;

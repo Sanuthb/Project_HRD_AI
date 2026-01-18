@@ -24,6 +24,13 @@ const data = {
 
       badge: "New",
     },
+    {
+      title: "Final Analysis",
+      url: "/candidate/finalanalysis",
+      icon: "LayoutDashboard",
+
+      badge: "New",
+    },
   ],
 };
 

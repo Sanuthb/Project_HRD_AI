@@ -5,61 +5,53 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Clock,
   FileText,
   CheckCircle2,
   XCircle,
-  LogOut,
   Upload,
+  Briefcase,
 } from "lucide-react";
-import { Candidate, Interview } from "@/lib/types";
-import { getCandidateByUserId } from "@/lib/services/candidates";
-import { getInterviewById } from "@/lib/services/interviews";
-import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { ProtectedRoute } from "@/components/protected-route";
 import { toast } from "sonner";
-import { adminSupabase } from "@/lib/supabase/admin";
+
+interface InterviewAssignment {
+  id: string;
+  name: string;
+  usn: string;
+  status: string;
+  resume_score: number | null;
+  resume_status: string;
+  interview_status: string;
+  manually_promoted: boolean;
+  interview_id: string;
+  interviews: {
+    id: string;
+    title: string;
+    jd_name: string;
+    interview_type: string;
+    duration: number;
+    status: string;
+    created_at: string;
+  };
+}
 
 function CandidateDashboardContent() {
   const router = useRouter();
   const { data: session } = useSession();
   const user = session?.user;
-  const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [interview, setInterview] = useState<Interview | null>(null);
+  const [interviews, setInterviews] = useState<InterviewAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
 
-  // useEffect(() => {
-  //   const fetchData = async () => {
-  //     if (!adminSupabase) {
-  //       console.error("Admin Supabase client is not available");
-  //       return;
-  //     }
-
-  //     const { data: resultData, error: resultError } = await adminSupabase
-  //       .from("interview_results")
-  //       .select()
-  //       .single();
-
-  //     console.log(resultData);
-  //   };
-  //   fetchData();
-  // }, []);
-
-  // Fetch candidate and interview data
+  // Fetch all interviews for the student
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInterviews = async () => {
       if (!user) {
         setIsLoading(false);
-        // ProtectedRoute handles redirection, but we wait for session
         return;
       }
 
@@ -67,98 +59,67 @@ function CandidateDashboardContent() {
       setError(null);
 
       try {
-        // Fetch candidate data using the logged-in user's profile (USN / candidate_id)
-        // @ts-ignore - session user id might be sub or id
-        const candidateData = await getCandidateByUserId(user.id || user.sub);
-
-        if (!candidateData) {
-          setError(
-            "No interview assigned to this account. Please contact the administrator."
-          );
-          setIsLoading(false);
-          return;
+        const response = await fetch("/api/candidate/my-interviews");
+        
+        if (!response.ok) {
+          throw new Error("Failed to fetch interviews");
         }
 
-        setCandidate(candidateData);
-
-        // Fetch interview data
-        if (candidateData.interview_id) {
-          const interviewData = await getInterviewById(
-            candidateData.interview_id
-          );
-
-          if (!interviewData) {
-            setError("Interview not found for this candidate.");
-          } else {
-            setInterview(interviewData);
+        const data = await response.json();
+        
+        if (data.success) {
+          setInterviews(data.data || []);
+          
+          if (data.data.length === 0) {
+            setError("No interviews assigned yet. Please contact your administrator.");
           }
         } else {
-          setError("No interview assigned to this candidate.");
+          throw new Error(data.error || "Failed to load interviews");
         }
       } catch (err: any) {
-        console.error("Error fetching data:", err);
+        console.error("Error fetching interviews:", err);
         setError(err.message || "Failed to load dashboard data");
+        toast.error("Failed to load interviews");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
+    fetchInterviews();
   }, [user]);
 
-  // Update countdown timer
-  useEffect(() => {
-    if (!interview?.created_at) return;
-
-    const updateTimer = () => {
-      // For now, we'll use a mock interview date (7 days from creation)
-      // In production, you'd have an actual interview_date field
-      const interviewDate = new Date(interview.created_at);
-      interviewDate.setDate(interviewDate.getDate() + 7); // Add 7 days
-
-      const now = new Date();
-      const diff = interviewDate.getTime() - now.getTime();
-
-      if (diff > 0) {
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor(
-          (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-        );
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-        setTimeLeft({ days, hours, minutes, seconds });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-
-    return () => clearInterval(timer);
-  }, [interview]);
-
-  const handleSignOut = async () => {
-    await nextAuthSignOut({ redirect: false });
-    router.push("/login");
+  const getInterviewStatus = (assignment: InterviewAssignment) => {
+    if (assignment.interview_status === "Completed") {
+      return "Completed";
+    }
+    if (assignment.status === "Promoted" || assignment.manually_promoted) {
+      return "Eligible";
+    }
+    if (assignment.status === "Not Promoted") {
+      return "Not Eligible";
+    }
+    if (assignment.resume_score !== null && assignment.resume_score >= 75) {
+      return "Eligible";
+    }
+    if (assignment.resume_score !== null && assignment.resume_score < 75) {
+      return "Not Eligible";
+    }
+    return "Pending";
   };
 
-  const interviewStatus =
-    candidate?.status === "Promoted"
-      ? "Completed"
-      : candidate?.status === "Not Promoted"
-        ? "Completed"
-        : candidate?.resume_score !== null &&
-          candidate?.resume_score !== undefined
-          ? "Scheduled"
-          : "Pending";
+  const canTakeInterview = (assignment: InterviewAssignment) => {
+    return (
+      assignment.status === "Promoted" ||
+      assignment.manually_promoted ||
+      (assignment.resume_score !== null && assignment.resume_score >= 75)
+    );
+  };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Loading your dashboard...</p>
+          <p className="text-muted-foreground">Loading your interviews...</p>
         </div>
       </div>
     );
@@ -167,267 +128,123 @@ function CandidateDashboardContent() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Interview Dashboard</h1>
-            <p className="text-muted-foreground">
-              Welcome, {candidate?.name || user?.email} (
-              {candidate?.usn || "N/A"})
-            </p>
-          </div>
-          <Button variant="outline" onClick={handleSignOut}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Sign Out
-          </Button>
-        </div>
+        <h1 className="text-3xl font-bold">My Interviews</h1>
+        <p className="text-muted-foreground">
+          Welcome, {user?.name || user?.email} ({user?.usn || "N/A"})
+        </p>
       </div>
 
       {error && (
-        <Alert className="border-red-500 bg-red-50 dark:bg-red-950">
-          <XCircle className="h-4 w-4 text-red-600" />
-          <AlertTitle className="text-red-800 dark:text-red-200">
-            Error
-          </AlertTitle>
-          <AlertDescription className="text-red-700 dark:text-red-300">
+        <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+          <AlertDescription className="text-yellow-700 dark:text-yellow-300">
             {error}
           </AlertDescription>
         </Alert>
       )}
 
-      {!interview && !isLoading && (
-        <Alert>
-          <AlertTitle>No Interview Found</AlertTitle>
-          <AlertDescription>
-            No interview has been assigned to you yet. Please contact the
-            administrator.
-          </AlertDescription>
-        </Alert>
+      {interviews.length > 0 && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {interviews.map((assignment) => {
+            const status = getInterviewStatus(assignment);
+            const canTake = canTakeInterview(assignment);
+
+            return (
+              <Card key={`${assignment.id}-${assignment.interviews.id}`} className="flex flex-col">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle 
+                        className="text-lg line-clamp-2 hover:text-primary cursor-pointer transition-colors"
+                        onClick={() => router.push(`/candidate/interview-details/${assignment.interviews.id}`)}
+                      >
+                        {assignment.interviews.title}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {assignment.interviews.jd_name}
+                      </p>
+                    </div>
+                    <Briefcase className="h-5 w-5 text-muted-foreground flex-shrink-0 ml-2" />
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col justify-between">
+                  <div className="space-y-3 mb-4">
+                    {assignment.interviews.interview_type && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Type:</span>
+                        <span className="font-medium">
+                          {assignment.interviews.interview_type}
+                        </span>
+                      </div>
+                    )}
+                    {assignment.interviews.duration && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Duration:</span>
+                        <span className="font-medium">
+                          {assignment.interviews.duration} min
+                        </span>
+                      </div>
+                    )}
+                    {assignment.resume_score !== null && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Resume Score:</span>
+                        <span className="font-medium">
+                          {assignment.resume_score}%
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Status:</span>
+                      <Badge
+                        variant={
+                          status === "Eligible" || status === "Completed"
+                            ? "default"
+                            : status === "Not Eligible"
+                            ? "destructive"
+                            : "secondary"
+                        }
+                      >
+                        {status}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 flex-col">
+                    {!canTake && (<Button 
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => router.push(`/candidate/interview-details/${assignment.interviews.id}`)}
+                    >
+                      View Details
+                    </Button>)
+          }
+                    {canTake && (
+                       <Button
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        onClick={() => router.push(`/interview/${assignment.interviews.id}`)}
+                      >
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Start Interview
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
-      {interview && candidate && (
-        <>
-          {/* Interview Status */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Interview Status</CardTitle>
-                <div className="flex items-center gap-3">
-                  <Badge
-                    variant={
-                      interviewStatus === "Scheduled"
-                        ? "default"
-                        : interviewStatus === "Completed"
-                          ? "secondary"
-                          : "outline"
-                    }
-                  >
-                    {interviewStatus === "Scheduled" && (
-                      <Clock className="mr-2 h-3 w-3" />
-                    )}
-                    {interviewStatus === "Completed" && (
-                      <CheckCircle2 className="mr-2 h-3 w-3" />
-                    )}
-                    {interviewStatus}
-                  </Badge>
-
-                  {/* 
-                      Logic:
-                      - If Promoted/Passed (>75) OR status="Promoted": Show "Take Interview" -> /interview/[id]
-                      - If Not eligible (<75) AND NOT Promoted: 
-                        - If they have a resume score (attempted once), show "Resume Verification Failed" (Disabled button)
-                        - If no score, show "Upload Resume"
-                  */}
-                  {candidate.status === "Promoted" ||
-                    candidate.manually_promoted ||
-                    (candidate.resume_score !== null &&
-                      candidate.resume_score !== undefined &&
-                      candidate.resume_score >= 75) ? (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        router.push(`/interview/${candidate.interview_id}`)
-                      }
-                      className="bg-green-600 hover:bg-green-700 h-8"
-                    >
-                      Take Interview Now
-                    </Button>
-                  ) : (
-                    /* Not Eligible Case */
-                    <Button
-                      size="sm"
-                      onClick={() => router.push(`/candidate/resume-upload`)}
-                      disabled={
-                        candidate.resume_score !== null &&
-                        candidate.resume_score !== undefined
-                      } // Disable if they already uploaded and failed (unless they can re-upload, but user said "cannot upload resume again")
-                      className={
-                        candidate.resume_score !== null
-                          ? "bg-red-600 hover:bg-red-700 h-8"
-                          : "bg-blue-600 hover:bg-blue-700 h-8"
-                      }
-                    >
-                      {candidate.resume_score !== null ? (
-                        <>
-                          <XCircle className="mr-2 h-3 w-3" />
-                          Verification Failed
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="mr-2 h-3 w-3" />
-                          Upload Resume
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
-                    Interview Title
-                  </p>
-                  <p className="text-lg font-semibold">{interview.title}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
-                    Job Description
-                  </p>
-                  <p className="text-lg">{interview.jd_name}</p>
-                </div>
-                {interview.interview_type && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">
-                      Interview Type
-                    </p>
-                    <p className="text-lg">{interview.interview_type}</p>
-                  </div>
-                )}
-                {interview.duration && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">
-                      Duration
-                    </p>
-                    <p className="text-lg">{interview.duration} minutes</p>
-                  </div>
-                )}
-                {candidate.resume_score !== null &&
-                  candidate.resume_score !== undefined && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">
-                        Resume Score
-                      </p>
-                      <p className="text-lg">{candidate.resume_score}%</p>
-                    </div>
-                  )}
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">
-                    Your Status
-                  </p>
-                  <Badge
-                    variant={
-                      candidate.status === "Promoted"
-                        ? "default"
-                        : candidate.status === "Not Promoted"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                    className="text-base px-3 py-1"
-                  >
-                    {candidate.status}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Countdown Timer */}
-          {interviewStatus === "Scheduled" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Time Remaining
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold">{timeLeft.days}</div>
-                    <div className="text-sm text-muted-foreground">Days</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold">{timeLeft.hours}</div>
-                    <div className="text-sm text-muted-foreground">Hours</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold">{timeLeft.minutes}</div>
-                    <div className="text-sm text-muted-foreground">Minutes</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold">{timeLeft.seconds}</div>
-                    <div className="text-sm text-muted-foreground">Seconds</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Job Description Summary */}
-          {interview.jd_text && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Job Description
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="prose prose-sm max-w-none">
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {interview.jd_text}
-                    </p>
-                  </div>
-                  {interview.jd_file_url && (
-                    <div>
-                      <a
-                        href={interview.jd_file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline text-sm"
-                      >
-                        📄 View Job Description PDF
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {!interview.jd_text && interview.jd_file_url && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Job Description
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <a
-                  href={interview.jd_file_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  📄 View Job Description PDF
-                </a>
-              </CardContent>
-            </Card>
-          )}
-        </>
+      {!isLoading && interviews.length === 0 && !error && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Interviews Yet</h3>
+            <p className="text-muted-foreground">
+              You haven't been assigned to any interviews yet. Please contact your
+              administrator.
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

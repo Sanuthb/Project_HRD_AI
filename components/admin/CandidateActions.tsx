@@ -28,7 +28,7 @@ interface CandidateActionsProps {
 
 export function CandidateActions({ candidate }: CandidateActionsProps) {
   const [showResume, setShowResume] = useState(false);
-  const interviewId = candidate.interview_id || "";
+  const interviewId = candidate.interview_ids?.[0] || "";
 
   const handlePromote = async () => {
     const result = await promoteCandidateAction(candidate.id, interviewId);

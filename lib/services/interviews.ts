@@ -50,7 +50,7 @@ export async function getInterviews(): Promise<Interview[]> {
       const { count } = await supabase
         .from('candidates')
         .select('*', { count: 'exact', head: true })
-        .eq('interview_id', interview.id);
+        .contains('interview_ids', [interview.id]);
 
       return {
         id: interview.id,
@@ -79,7 +79,7 @@ export async function getInterviewById(id: string): Promise<Interview | null> {
     .single();
 
   if (error) {
-    console.error('Error fetching interview:', error);
+    console.error(`Error fetching interview (ID: ${id}):`, JSON.stringify(error, null, 2));
     return null;
   }
 
@@ -127,6 +127,39 @@ export async function updateInterviewStatus(
 }
 
 export async function deleteInterview(id: string): Promise<void> {
+  // First, remove this interview ID from all candidates' interview_ids arrays
+  // Using PostgreSQL's array_remove function
+  const { error: candidatesError } = await supabase
+    .rpc('remove_interview_from_candidates', { interview_id_to_remove: id });
+
+  // If RPC doesn't exist, fall back to manual update
+  if (candidatesError) {
+    console.log('RPC not available, using manual array update');
+    
+    // Get all candidates that have this interview in their array
+    const { data: candidates } = await supabase
+      .from('candidates')
+      .select('id, interview_ids')
+      .contains('interview_ids', [id]);
+
+    if (candidates && candidates.length > 0) {
+      // Update each candidate to remove the interview ID from their array
+      for (const candidate of candidates) {
+        const updatedIds = (candidate.interview_ids || []).filter(
+          (iid: string) => iid !== id
+        );
+        
+        await supabase
+          .from('candidates')
+          .update({ 
+            interview_ids: updatedIds,
+          })
+          .eq('id', candidate.id);
+      }
+    }
+  }
+
+  // Now delete the interview itself
   const { error } = await supabase
     .from('interviews')
     .delete()

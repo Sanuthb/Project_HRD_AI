@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/sidebar";
-import { LayoutDashboard, FileText, PlusCircle, Users } from "lucide-react";
+import { LayoutDashboard, FileText, PlusCircle, Users, Shield } from "lucide-react";
 import DashboardProvider from "../candidate/_components/pageComponents/DashboardProvider";
 
 const data = {
@@ -25,6 +25,11 @@ const data = {
       href: "/admin/users",
       label: "Users",
       icon: "Users",
+    },
+    {
+      href: "/admin/admin-users",
+      label: "Admin Users",
+      icon: "Shield",
     },
   ],
 };

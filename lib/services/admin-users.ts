@@ -7,9 +7,10 @@ export interface AdminUserRecord {
   email: string | null;
   batch: string | null;
   dept: string | null;
-  interviewId: string | null;
+  interviewIds: string[];
   interviewTitle: string | null;
   hasAuthUser: boolean;
+  role: string | null;
 }
 
 export interface CreatedAuthUser {
@@ -40,18 +41,18 @@ export async function listAdminUsers(): Promise<AdminUserRecord[]> {
     // Fetch candidates
     const { data: candidates, error: candidatesError } = await adminSupabase
       .from("candidates")
-      .select("id, name, usn, email, batch, dept, interview_id, created_at")
+      .select("id, name, usn, email, batch, dept, interview_ids, created_at")
       .order("created_at", { ascending: false });
 
-    console.log("Candidates query result:", {
-      candidates,
-      error: candidatesError,
-    });
+    // console.log("Candidates query result:", {
+    //   candidates,
+    //   error: candidatesError,
+    // });
 
     if (candidatesError) {
       console.error(
         "Error fetching candidates for admin users:",
-        candidatesError
+        candidatesError,
       );
       throw candidatesError;
     }
@@ -66,7 +67,7 @@ export async function listAdminUsers(): Promise<AdminUserRecord[]> {
     // Let's fetch all user_profiles to map USN -> hasAccount
     const { data: profiles, error: profilesError } = await adminSupabase
       .from("user_profiles")
-      .select("usn, candidate_id");
+      .select("usn,role, candidate_id");
 
     console.log("Profiles query result:", { profiles, error: profilesError });
 
@@ -77,9 +78,13 @@ export async function listAdminUsers(): Promise<AdminUserRecord[]> {
 
     const registeredUSNs = new Set<string>();
     const linkedCandidateIds = new Set<string>();
+    const usnToRoleMap = new Map<string, string>();
 
     (profiles || []).forEach((p: any) => {
-      if (p.usn) registeredUSNs.add(p.usn);
+      if (p.usn) {
+        registeredUSNs.add(p.usn);
+        if (p.role) usnToRoleMap.set(p.usn, p.role);
+      }
       if (p.candidate_id) linkedCandidateIds.add(p.candidate_id);
     });
 
@@ -100,9 +105,10 @@ export async function listAdminUsers(): Promise<AdminUserRecord[]> {
           email: c.email ?? null,
           batch: c.batch ?? null,
           dept: c.dept ?? null,
-          interviewId: c.interview_id ?? null,
+          interviewIds: c.interview_ids ?? [],
           interviewTitle: null, // Title logic is tricky with deduplication, maybe omit or join
           hasAuthUser: registeredUSNs.has(usn) || linkedCandidateIds.has(c.id),
+          role: usnToRoleMap.get(usn) || null,
         });
       } else {
         // Optional: If the existing entry has missing details (like null batch) but this older one has it, fill it in?
@@ -156,7 +162,7 @@ export async function createAdminUser(input: {
   // 1) Reuse existing candidate if one already exists for this USN
   const { data: existingCandidate, error: existingError } = await adminSupabase
     .from("candidates")
-    .select("id, name, usn, email, batch, dept, interview_id, created_at")
+    .select("id, name, usn, email, batch, dept, interview_ids, created_at")
     .eq("usn", usn)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -196,13 +202,13 @@ export async function createAdminUser(input: {
           status: "Pending",
         },
       ])
-      .select("id, name, usn, email, batch, dept, interview_id, created_at")
+      .select("id, name, usn, email, batch, dept, interview_ids, created_at")
       .single();
 
     if (candidateError || !created) {
       console.error(
         "Error creating candidate in admin user creation:",
-        candidateError
+        candidateError,
       );
       throw candidateError;
     }
@@ -228,7 +234,7 @@ export async function createAdminUser(input: {
     console.error(
       "Error creating user_profile for candidate:",
       candidate.id,
-      linkError
+      linkError,
     );
     throw new Error(`Failed to create user profile: ${linkError.message}`);
   }
@@ -251,9 +257,10 @@ export async function createAdminUser(input: {
     email: candidate.email ?? null,
     batch: candidate.batch ?? null,
     dept: candidate.dept ?? null,
-    interviewId: candidate.interview_id ?? null,
+    interviewIds: candidate.interview_ids ?? [],
     interviewTitle: null,
     hasAuthUser: true,
+    role: null,
   };
 
   return { user, auth };
@@ -294,7 +301,7 @@ export async function updateAdminUser(
     email?: string;
     batch?: string;
     dept?: string;
-  }
+  },
 ): Promise<void> {
   if (!adminSupabase) {
     throw new Error("Admin Supabase client is not configured on the server.");
