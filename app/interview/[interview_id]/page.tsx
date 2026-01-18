@@ -25,6 +25,10 @@ import AlertConfirmation from "@/components/AlertConfirmation";
 import { InterviewContext } from "@/lib/contexts/InterviewContext";
 import { ProctoringManager } from "@/components/interview/ProctoringManager";
 
+import { useInterviewRecorder } from "@/hooks/useInterviewRecorder";
+import { RecordingConsentModal } from "@/components/interview/RecordingConsentModal";
+import { RecordingIndicator } from "@/components/interview/RecordingIndicator";
+
 export default function Page() {
   const { user } = useAuth();
   const interviewContext = useContext(InterviewContext);
@@ -34,8 +38,6 @@ export default function Page() {
     jobposition: "",
     questionlist: [],
   };
-
-  // console.log("Interview data:", interviewdata);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const vapiRef = useRef<Vapi | null>(null);
@@ -63,7 +65,22 @@ export default function Page() {
   // resumeText state
   const [resumeText, setResumeText] = useState<string>("");
 
+  // Recording State
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+
   const { candidateId } = useAuth();
+
+  // Initialize Recorder
+  const { 
+    startRecording, 
+    stopRecording, 
+    isRecording, 
+    uploadQueue 
+  } = useInterviewRecorder({
+    interviewId: interview?.id || "",
+    candidateId: candidate?.id || ""
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -132,8 +149,6 @@ export default function Page() {
 
     fetchData();
   }, [user?.id, interview_id]);
-
-  // console.log();
 
   // -------------------------------------------
   // 💡 Enable Camera + Mic (like Google Meet)
@@ -260,9 +275,6 @@ export default function Page() {
       // Stability & Timeout Settings
       maxDurationSeconds: (interview?.duration || 15) * 60 + 300, // Duration + 5 min buffer
       silenceTimeoutSeconds: 60, // Wait 60s before ending due to silence
-      // transportConfigurations: {
-      //   timeout: 60, // Increase connection timeout
-      // },
       firstMessageMode: "assistant-speaks-first",
     };
 
@@ -272,7 +284,6 @@ export default function Page() {
       if (!vapi) {
         throw new Error("Vapi client is not initialized.");
       }
-      // Cast options to relax strict DTO type requirements while keeping runtime shape
       await vapi.start(assistantOptions as any);
     } catch (error) {
       const err = error as { message?: string };
@@ -339,13 +350,10 @@ export default function Page() {
         clearInterval(timerRef.current);
       }
 
-      // If the call never actually started (e.g. immediate failure), do NOT try to save conversation
-      // If the call never actually started but was manually ended, we still want to generate feedback (skip/abort scenario)
       if (!hasCallStartedRef.current) {
         console.log(
           "Call ended before starting. Proceeding to feedback generation..."
         );
-        // Don't return, proceed to save conversation (which will use fallback)
       }
 
       setTimeout(() => {
@@ -358,7 +366,6 @@ export default function Page() {
           setConversation(data);
           console.log("Conversation saved successfully:", data);
 
-          // Trigger report generation automatically using the latest function reference
           if (generateFeedbackRef.current) {
             generateFeedbackRef.current(data);
           }
@@ -367,7 +374,6 @@ export default function Page() {
         if (conversationBuffer.current) {
           runGenerate(conversationBuffer.current);
         } else {
-          // If buffer is still empty, proceed with empty array (will trigger fallback in generateFeedback)
           console.warn(
             "Conversation empty, using fallback for immediate exit."
           );
@@ -383,7 +389,6 @@ export default function Page() {
     };
 
     const handleError = (error: any) => {
-      // Ignore "Meeting has ended" errors as they are benign during stop sequence
       if (
         error?.message === "Meeting has ended" ||
         error === "Meeting has ended"
@@ -391,8 +396,6 @@ export default function Page() {
         return;
       console.error("Vapi error:", error);
 
-      // Deeply extract error message
-      // Common Vapi patterns: error.message, error.errorMsg, error.error.msg, error.error.message
       const rawMsg =
         error?.error?.msg ||
         error?.error?.message ||
@@ -403,15 +406,12 @@ export default function Page() {
 
       const lowerMsg = String(rawMsg).toLowerCase();
 
-      // Detection of specific "ejection" error
       if (lowerMsg.includes("ejection") || lowerMsg.includes("kick")) {
         console.warn(
           "Vapi Ejection Detected. This usually means a connection timeout or room expiry."
         );
-        // We can treat this as a call end if we want, or just let the user retry
       }
 
-      // If Vapi says the meeting has ended, treat it as a graceful end
       if (lowerMsg.includes("meeting has ended")) {
         if (hasCallStartedRef.current) {
           handleCallEnd();
@@ -450,18 +450,13 @@ export default function Page() {
         clearInterval(timerRef.current);
       }
     };
-  }, []); // Run only once on mount
-
-  // console.log("interviewdata tr", interviewdata);
-
-  // console.log("interviewdata tr", interviewdata);
+  }, []);
 
   console.log("candidate", candidate);
 
   const generateFeedback = async (conversationData: any) => {
     console.log("Generating feedback with data:", conversationData);
     try {
-      // Fallback for empty conversation (e.g. manual skip or early exit)
       const finalConversation =
         conversationData &&
         Array.isArray(conversationData) &&
@@ -476,21 +471,15 @@ export default function Page() {
             ];
 
       if (!finalConversation) {
-        // Should be covered by fallback, but double check
         toast.error("No conversation data available to generate feedback.");
         return;
       }
 
-      // Robust ID resolution: Try candidate's stored ID first, then fall back to URL param
-      let targetInterviewId = candidate?.interview_id;
-      if (!targetInterviewId) {
-        const normalizedInputId = Array.isArray(interview_id)
-          ? interview_id[0]
-          : interview_id;
-        if (normalizedInputId) {
-          targetInterviewId = normalizedInputId;
-        }
-      }
+      const normalizedInputId = Array.isArray(interview_id)
+        ? interview_id[0]
+        : interview_id;
+      
+      const targetInterviewId = normalizedInputId;
 
       if (!candidate?.id) {
         toast.error("Candidate information missing. Cannot save feedback.");
@@ -523,7 +512,7 @@ export default function Page() {
         if (timerRef.current !== null) {
           clearInterval(timerRef.current);
         }
-        router.push("/candidate/interview-ended"); // Redirect to ended page
+        router.push("/candidate/interview-ended"); 
       } else {
         throw new Error("Failed to generate/save report");
       }
@@ -540,7 +529,13 @@ export default function Page() {
     }
   };
 
-  const handleStartInterview = () => {
+  const handleStartInterview = async () => {
+    // 1. Check Consent
+    if (!consentGiven) {
+      setShowConsentModal(true);
+      return;
+    }
+
     if (vapiRef.current) {
       // Enter Full Screen
       const element = document.documentElement;
@@ -554,6 +549,10 @@ export default function Page() {
       interviewContext?.setIsInterviewing(true);
       setInterviewStarted(true);
       setCallError(null);
+      
+      // Start Recording
+      await startRecording();
+      
       startCall();
     } else {
       const errorMessage =
@@ -567,6 +566,10 @@ export default function Page() {
     try {
       setLoading(true);
       vapiRef.current?.stop();
+      
+      // Stop Recording
+      stopRecording();
+
       setInterviewStarted(false);
       interviewContext?.setIsInterviewing(false);
       setCallError(null);
@@ -593,15 +596,27 @@ export default function Page() {
   // -------------------------------------------
   return (
     <div className="w-full h-screen flex flex-col bg-gray-900 text-white">
+      <RecordingConsentModal 
+        open={showConsentModal} 
+        onConsent={() => {
+          setConsentGiven(true);
+          setShowConsentModal(false);
+          toast.success("Consent recorded. Proceeding...");
+        }} 
+      />
+
       {/* TOP BAR */}
       <div className="h-14 bg-black/40 flex items-center justify-between px-6 shadow-lg">
-        <h2 className="text-xl font-semibold">
-          AI Interview for{" "}
-          {interview?.title ||
-            interview?.jd_name ||
-            interviewdata?.jobposition ||
-            "Loading..."}
-        </h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-semibold">
+            AI Interview for{" "}
+            {interview?.title ||
+              interview?.jd_name ||
+              interviewdata?.jobposition ||
+              "Loading..."}
+          </h2>
+          <RecordingIndicator isRecording={isRecording} uploadQueue={uploadQueue} />
+        </div>
         {elapsedTime > 0 && (
           <span className="text-red-500 font-mono animate-pulse">
             {new Date(elapsedTime * 1000).toISOString().substr(11, 8)}

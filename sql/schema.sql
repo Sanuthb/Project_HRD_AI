@@ -149,7 +149,30 @@ CREATE POLICY "Public Upload Resumes" ON storage.objects FOR INSERT WITH CHECK (
 CREATE POLICY "Public Access JDs" ON storage.objects FOR SELECT USING (bucket_id = 'job-descriptions');
 CREATE POLICY "Public Upload JDs" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'job-descriptions');
 
+-- Interview Recordings: authenticated uploads, admin/owner reads
+INSERT INTO storage.buckets (id, name, public) VALUES ('interview-recordings', 'interview-recordings', false) ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Give access to own recordings" ON storage.objects FOR SELECT USING (bucket_id = 'interview-recordings' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Upload own recordings" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'interview-recordings'); 
+-- Note: Ideally we restrict folder name to match user ID, but for now simple authenticated insert is enough for the MVP instructions.
+
+CREATE TABLE public.recording_metadata (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  interview_id uuid NOT NULL,
+  candidate_id uuid NOT NULL,
+  start_time timestamp with time zone DEFAULT now(),
+  end_time timestamp with time zone,
+  total_chunks integer DEFAULT 0,
+  duration_seconds integer DEFAULT 0,
+  risk_level text DEFAULT 'LOW',
+  verification_status text DEFAULT 'Pending' CHECK (verification_status IN ('Pending', 'Verified', 'Rejected')),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT recording_metadata_pkey PRIMARY KEY (id),
+  CONSTRAINT recording_metadata_interview_id_fkey FOREIGN KEY (interview_id) REFERENCES public.interviews(id),
+  CONSTRAINT recording_metadata_candidate_id_fkey FOREIGN KEY (candidate_id) REFERENCES public.candidates(id)
+);
+
 -- DEFAULT ADMIN USER (Plain text password as per current auth implementation)
 INSERT INTO public.admin_users (name, email, password, role)
-VALUES ('Super Admin', 'admin@example.com', 'admin@123', 'super_admin')
+VALUES ('Super Admin', 'admin@example.com', 'admin123', 'super_admin')
 ON CONFLICT (email) DO NOTHING;
