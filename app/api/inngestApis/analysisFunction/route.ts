@@ -5,11 +5,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const { candidateId } = body;
+
+    const { candidateId, conversation, interviewId } = body;
+
 
     if (!adminSupabase) {
       console.error(
-        "Supabase admin client (adminSupabase) is null. serviceRoleKey might be missing."
+        "Supabase admin client (adminSupabase) is null. serviceRoleKey might be missing.",
       );
       throw new Error("Supabase admin client is not configured");
     }
@@ -27,41 +29,53 @@ export async function POST(request: Request) {
               interview_type
             ),
             transcript
-          `
+          `,
       )
       .eq("candidate_id", candidateId)
       .order("created_at", { ascending: false });
 
-    console.log("feedbackData=", feedbackData);
 
-    const { data: resumeData } = await adminSupabase
+
+
+
+
+    const { data: candidateData } = await adminSupabase
       .from("candidates")
-      .select("resume_analysis")
-      .eq("id", candidateId);
+      .select("*")
+      .eq("id", candidateId)
+      .single();
 
-    console.log("resumeData=", resumeData);
+
+    let interviewsData: any[] = [];
+    if (candidateData?.interview_ids && candidateData.interview_ids.length > 0) {
+      const { data: interviews } = await adminSupabase
+        .from("candidate_interviews")
+        .select(`
+        resume_analysis
+        `)
+        .eq("candidate_id", candidateId)
+        .in("interview_id", candidateData.interview_ids);
+      interviewsData = (interviews || []).map((i: any) => i.resume_analysis);
+    }
+
+
+
 
     const response = await inngest.send({
       name: "userDetails/analysis.function",
-      data: { resumeData, feedbackData, candidateId },
+      data: {
+        resumeData: interviewsData,
+        feedbackData,
+        candidateId,
+        conversation,
+        interviewId,
+      },
     });
 
     const runId = response.ids[0];
+    return Response.json({ success: true, message: "Analysis job queued", runId });
 
-    let runStatus;
 
-    while (true) {
-      runStatus = await getRunStatus(runId);
-
-      const status = runStatus[0]?.status;
-      if (status === "Completed") {
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-
-    return Response.json(runStatus[0]?.output?.output[0]);
   } catch (err) {
     console.error(err);
     return new Response("Internal Server Error", { status: 500 });
@@ -77,7 +91,7 @@ async function getRunStatus(runId: string) {
       headers: {
         Authorization: `Bearer ${process.env.INNGEST_SIGNING_KEY}`,
       },
-    }
+    },
   );
 
   const json = await response.json();

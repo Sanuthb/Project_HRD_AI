@@ -115,31 +115,44 @@ export default function InterviewsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
-                      variant={interview.status === "Active" ? "default" : "secondary"}
+                      variant={
+                        interview.status === "Active" ? "default" : "secondary"
+                      }
                     >
                       {interview.status}
                     </Badge>
-                    
+
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogTitle>
+                            Are you absolutely sure?
+                          </AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete the interview "<strong>{interview.title}</strong>" and all associated candidate records. This action cannot be undone.
+                            This will permanently delete the interview "
+                            <strong>{interview.title}</strong>" and all
+                            associated candidate records. This action cannot be
+                            undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
+                          <AlertDialogAction
                             onClick={() => handleDelete(interview.id)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
-                            {deletingId === interview.id ? "Deleting..." : "Delete"}
+                            {deletingId === interview.id
+                              ? "Deleting..."
+                              : "Delete"}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -165,7 +178,7 @@ export default function InterviewsPage() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Link href={`/admin/dashboard/${interview.id}`}>
+                  <Link href={`/admin/interviews/${interview.id}`}>
                     <Button variant="outline">
                       <Eye className="mr-2 h-4 w-4" />
                       View Results
@@ -180,4 +193,3 @@ export default function InterviewsPage() {
     </div>
   );
 }
-

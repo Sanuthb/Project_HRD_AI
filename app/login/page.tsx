@@ -39,7 +39,7 @@ export default function LoginPage() {
 
       if (result?.error) {
         setError(
-          "Invalid credentials. Please check your email/USN and password."
+          "Invalid credentials. Please check your email/USN and password.",
         );
         toast.error("Invalid credentials");
       } else {
@@ -50,7 +50,7 @@ export default function LoginPage() {
         const session = await response.json();
         const role = session?.user?.role;
 
-        if (role === "admin") {
+        if (role === "super_admin" || role === "admin") {
           router.push("/admin");
         } else {
           router.push("/candidate/dashboard");

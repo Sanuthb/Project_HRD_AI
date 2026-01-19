@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/lib/contexts/auth-context";
+import axios from "axios";
 
 export default function CandidateDashboard() {
   const { data: session, status } = useSession();
@@ -21,6 +22,18 @@ export default function CandidateDashboard() {
 
   const { candidateId } = useAuth();
   console.log("candidateId=", candidateId);
+
+  useEffect(() => {
+    const fetchInterviews = async () => {
+      const res = await axios.post("/api/inngestApis/analysisFunction", {
+        candidateId,
+        conversation: "",
+        interviewId: ""
+      })
+      console.log("res==>", res.data)
+    };
+    fetchInterviews();
+  }, [candidateId])
 
   useEffect(() => {
     if (status === "loading") return;

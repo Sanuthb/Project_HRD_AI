@@ -202,9 +202,9 @@ export default function Page() {
     // Dynamic Resume Info: Use text if available, fallback to URL
     const resumeContext = resumeText
       ? `Candidate Resume Content:\n${resumeText.substring(
-        0,
-        5000,
-      )}... (truncated)`
+          0,
+          5000,
+        )}... (truncated)`
       : candidate?.resume_url
         ? `Available at ${candidate.resume_url}.`
         : "No resume provided.";
@@ -232,23 +232,27 @@ export default function Page() {
                           Your job is to ask candidates relevant interview questions based on their resume and the job description provided.
 
                           **Context:**
-                          - Job Description: ${interview?.jd_text ||
-              interview?.jd_name ||
-              interviewdata?.jobposition
-              }
-                          - Candidate Name: ${candidate?.name || interviewdata?.Username
-              }
+                          - Job Description: ${
+                            interview?.jd_text ||
+                            interview?.jd_name ||
+                            interviewdata?.jobposition
+                          }
+                          - Candidate Name: ${
+                            candidate?.name || interviewdata?.Username
+                          }
                           - Candidate Resume Info: ${resumeContext}
-                          - Interview Duration: ${interview?.duration || 15
-              } minutes
+                          - Interview Duration: ${
+                            interview?.duration || 15
+                          } minutes
 
                           **Instructions:**
                           1. Begin with a friendly, professional introduction.
                           2. Analyze the Job Description and the Candidate's Resume (if available).
                           3. Generate strictly relevant interview questions.
                           4. Ask one question at a time and wait for the candidate's response.
-                          5. Manage the interview time efficiently. You have exactly ${interview?.duration || 15
-              } minutes.
+                          5. Manage the interview time efficiently. You have exactly ${
+                            interview?.duration || 15
+                          } minutes.
                              - Pace your questions to cover key areas within this timeframe.
                              - If time is running out, wrap up with a final question or a polite closing.
                              - Do not exceed the allocated duration significantly.
@@ -279,8 +283,9 @@ export default function Page() {
       await vapi.start(assistantOptions as any);
     } catch (error) {
       const err = error as { message?: string };
-      const msg = `Could not start the interview: ${err.message || "Unknown error"
-        }`;
+      const msg = `Could not start the interview: ${
+        err.message || "Unknown error"
+      }`;
       toast.error(msg);
       setCallError(msg);
       setInterviewStarted(false);
@@ -450,16 +455,16 @@ export default function Page() {
     try {
       const finalConversation =
         conversationData &&
-          Array.isArray(conversationData) &&
-          conversationData.length > 0
+        Array.isArray(conversationData) &&
+        conversationData.length > 0
           ? conversationData
           : [
-            {
-              role: "system",
-              content:
-                "The candidate ended the interview early or skipped the interview without any conversation. Please evaluate based on this information (likely a rejection or no-show).",
-            },
-          ];
+              {
+                role: "system",
+                content:
+                  "The candidate ended the interview early or skipped the interview without any conversation. Please evaluate based on this information (likely a rejection or no-show).",
+              },
+            ];
 
       if (!finalConversation) {
         toast.error("No conversation data available to generate feedback.");
@@ -492,21 +497,26 @@ export default function Page() {
 
       // console.log("Feedback result:✅", result.data);
 
-      const result = await axios.post("/api/inngestApis/analysisFunction", {
-        candidateId: candidate.id,
+      await axios.post("/api/inngestApis/analysisFunction", {
+        candidateId: candidateId,
         conversation: finalConversation,
         interviewId: targetInterviewId,
       });
 
-      if (result.status === 200) {
-        toast.success("Interview report is being generated in the background.");
+      if (result.data.success) {
+        toast.success("Interview report generated and saved successfully.");
+
+        // await axios.post("/api/inngestApis/analysisFunction", {
+        //   candidateId: candidateId,
+        // });
+
         disableMedia();
         if (timerRef.current !== null) {
           clearInterval(timerRef.current);
         }
         router.push("/candidate/interview-ended");
       } else {
-        throw new Error("Failed to queue report generation");
+        throw new Error("Failed to generate/save report");
       }
     } catch (err) {
       const e = err as any;
@@ -573,8 +583,9 @@ export default function Page() {
         clearInterval(timerRef.current);
       }
     } catch (error: any) {
-      const msg = `Error stopping the interview: ${error.message || "Unknown error"
-        }`;
+      const msg = `Error stopping the interview: ${
+        error.message || "Unknown error"
+      }`;
       toast.error(msg);
       setCallError(msg);
     } finally {
@@ -623,8 +634,9 @@ export default function Page() {
         {/* AI PANEL */}
         <div className="relative bg-gray-800 rounded-xl flex items-center justify-center border border-gray-700">
           <div
-            className={`bg-gray-900 p-6 rounded-full shadow-xl transition-all duration-300 ${!activeUser ? "ring-4 ring-amber-400" : ""
-              }`}
+            className={`bg-gray-900 p-6 rounded-full shadow-xl transition-all duration-300 ${
+              !activeUser ? "ring-4 ring-amber-400" : ""
+            }`}
           >
             <BotMessageSquare size={90} className="text-amber-400" />
           </div>
@@ -651,8 +663,9 @@ export default function Page() {
       <div className="h-20 bg-black/40 flex items-center justify-center gap-6">
         {/* MIC TOGGLE */}
         <button
-          className={`p-4 rounded-full ${micEnabled ? "bg-gray-700" : "bg-red-600"
-            }`}
+          className={`p-4 rounded-full ${
+            micEnabled ? "bg-gray-700" : "bg-red-600"
+          }`}
           onClick={() => {
             setMicEnabled(!micEnabled);
             enableMedia();
@@ -663,8 +676,9 @@ export default function Page() {
 
         {/* CAMERA TOGGLE */}
         <button
-          className={`p-4 rounded-full ${cameraEnabled ? "bg-gray-700" : "bg-red-600"
-            }`}
+          className={`p-4 rounded-full ${
+            cameraEnabled ? "bg-gray-700" : "bg-red-600"
+          }`}
           onClick={() => {
             setCameraEnabled(!cameraEnabled);
             enableMedia();

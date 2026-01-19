@@ -53,7 +53,7 @@ export default function HomePage() {
             </Button>
           </Link>
           <Link
-            href={user?.role === "admin" ? "/admin" : "/candidate/dashboard"}
+            href={user?.role === "admin" || user?.role === "super_admin" ? "/admin" : "/candidate/dashboard"}
           >
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-primary/35 hover:scale-105 transition-all duration-200 font-semibold">
               Get Started
@@ -85,9 +85,9 @@ export default function HomePage() {
 
           <div className="flex flex-wrap gap-4 pt-4">
             <Link
-              href={user?.role === "admin" ? "/" : "/candidate/dashboard"}
+              href={user?.role === "admin" || user?.role === "super_admin" ? "/" : "/candidate/dashboard"}
               onClick={(e) => {
-                if (user?.role === "admin") {
+                if (user?.role === "admin" || user?.role === "super_admin") {
                   e.preventDefault();
                   toast("You admin user not allowed to access start interview");
                 }
